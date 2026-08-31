@@ -15,6 +15,7 @@ const BROWSER_TESTS = [
   'test-image-pipeline.py',
   'test-image-ui.py',
   'test-image-live.py',
+  'test-adjustments.py',
 ];
 
 let failures = 0;

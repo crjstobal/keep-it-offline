@@ -67,7 +67,8 @@ export function init(elements) {
     });
 
     // The look is committed, so the draft goes back to neutral: leaving it set
-    // would show it twice, once queued and once as a pending preview.
+    // would show it twice, once queued and once as a pending preview. Looks
+    // still stack, so choosing another one adds a second step.
     resetDraft();
   });
 

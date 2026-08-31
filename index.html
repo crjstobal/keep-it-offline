@@ -37,6 +37,9 @@
           <input type="file" id="file-input" multiple accept="application/pdf,image/*" hidden />
         </div>
 
+        <details class="files-summary" id="files-summary" hidden>
+          <summary></summary>
+        </details>
         <ul class="asset-list" id="asset-list"></ul>
 
         <div class="editor" id="editor" hidden>
@@ -52,7 +55,7 @@
             <button class="danger" id="remove-selected" disabled>Remove selected</button>
             <label class="field zoom-field">
               <span class="zoom-icon" aria-hidden="true">◻</span>
-              <input type="range" id="thumb-size" min="90" max="280" value="130"
+              <input type="range" id="thumb-size" min="70" max="560" value="130"
                      aria-label="Thumbnail size" />
             </label>
           </div>
@@ -90,11 +93,11 @@
             <button class="ghost" id="apply-format">Convert</button>
           </div>
           <div class="actionbar actionbar-secondary">
-            <span class="hint-inline">The look previews live. Apply adds one step to the stack.</span>
+            <span class="hint-inline">Looks preview live and stack: apply one, then pick another.</span>
             <span class="sep" aria-hidden="true"></span>
             <label class="field zoom-field">
               <span class="zoom-icon" aria-hidden="true">◻</span>
-              <input type="range" id="image-thumb-size" min="120" max="360" value="180"
+              <input type="range" id="image-thumb-size" min="80" max="720" value="200"
                      aria-label="Thumbnail size" />
             </label>
           </div>

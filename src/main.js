@@ -78,6 +78,10 @@ for (const button of document.querySelectorAll('[data-select]')) {
 
 // One control sizes each grid, so a long document can be scanned at a glance or
 // inspected closely without leaving the page.
+document.getElementById('files-summary').addEventListener('toggle', () => {
+  renderAssets(getState());
+});
+
 const thumbSize = document.getElementById('thumb-size');
 thumbSize.addEventListener('input', () => {
   els.gridHost.style.setProperty('--thumb-size', `${thumbSize.value}px`);
@@ -165,18 +169,17 @@ function download(bytes, type, filename) {
   URL.revokeObjectURL(url);
 }
 
-async function exportAsset(assetId) {
-  const asset = getAsset(assetId);
-  if (!asset) return;
-
-  const ops = operationsFor(asset.id);
-  if (ops.length === 0) return;
-  const plain = ops.map((op) => ({ type: op.type, params: op.params }));
+/** Apply the stack to one file and return the bytes, without downloading. */
+async function renderAsset(asset) {
+  const plain = operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params }));
 
   if (asset.kind === 'pdf') {
     const { bytes } = await pdfCall('apply', { bytes: asset.bytes.slice(0), operations: plain });
-    download(bytes, 'application/pdf', asset.name.replace(/\.pdf$/i, '') + '-edited.pdf');
-    return;
+    return {
+      bytes,
+      type: 'application/pdf',
+      filename: asset.name.replace(/\.pdf$/i, '') + '-edited.pdf',
+    };
   }
 
   // Any look in the stack has to reach the worker before it can be applied.
@@ -192,14 +195,56 @@ async function exportAsset(assetId) {
 
   const extension = result.type.split('/')[1].replace('jpeg', 'jpg');
   const base = asset.name.replace(/\.[^.]+$/, '');
-  download(result.bytes, result.type, `${base}-edited.${extension}`);
+  return { bytes: result.bytes, type: result.type, filename: `${base}-edited.${extension}` };
 }
 
-/** Export every file that has enabled operations, for a batch. */
+async function exportAsset(assetId) {
+  const asset = getAsset(assetId);
+  if (!asset || operationsFor(asset.id).length === 0) return;
+  const { bytes, type, filename } = await renderAsset(asset);
+  download(bytes, type, filename);
+}
+
+/**
+ * Export everything with pending work.
+ *
+ * A single file downloads as itself. Several arrive as one zip: browsers block
+ * repeated downloads from a page, so firing forty of them would silently lose
+ * most of the batch.
+ */
 async function exportAll() {
-  for (const asset of getState().assets) {
-    if (operationsFor(asset.id).length > 0) await exportAsset(asset.id);
+  const pending = getState().assets.filter((a) => operationsFor(a.id).length > 0);
+  if (pending.length === 0) return;
+
+  if (pending.length === 1) {
+    await exportAsset(pending[0].id);
+    return;
   }
+
+  setExportProgress(0, pending.length);
+  const files = {};
+  for (const [index, asset] of pending.entries()) {
+    const { bytes, filename } = await renderAsset(asset);
+    files[filename] = new Uint8Array(bytes);
+    setExportProgress(index + 1, pending.length);
+  }
+
+  const { zipSync } = await import('https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm');
+  // The zip is built in memory from files that were already in memory: still
+  // nothing leaves the browser.
+  const zipped = zipSync(files, { level: 6 });
+  download(zipped, 'application/zip', 'keepitoffline.zip');
+  setExportProgress(null);
+}
+
+function setExportProgress(done, total) {
+  if (done === null) {
+    els.exportBtn.textContent = 'Apply and download';
+    els.exportBtn.disabled = false;
+    return;
+  }
+  els.exportBtn.disabled = true;
+  els.exportBtn.textContent = `Preparing ${done} of ${total}...`;
 }
 
 els.exportBtn.addEventListener('click', () => {
@@ -213,6 +258,24 @@ window.addEventListener('keepitoffline:export', (event) => exportAsset(event.det
 
 function renderAssets(state) {
   els.assetList.replaceChildren();
+
+  // With a batch of photographs the file list is not the interesting part of
+  // the page: one line per file would push the previews off the screen
+  // entirely. Past a handful, collapse to a summary that can be opened.
+  const summary = document.getElementById('files-summary');
+  const many = state.assets.length > 4;
+  summary.hidden = !many;
+  els.assetList.classList.toggle('is-collapsed', many && !summary.open);
+
+  if (many) {
+    const counts = { pdf: 0, image: 0 };
+    for (const asset of state.assets) counts[asset.kind]++;
+    const parts = [];
+    if (counts.pdf) parts.push(`${counts.pdf} PDF${counts.pdf === 1 ? '' : 's'}`);
+    if (counts.image) parts.push(`${counts.image} image${counts.image === 1 ? '' : 's'}`);
+    summary.querySelector('summary').textContent = `${parts.join(' and ')} on the bench`;
+  }
+
   for (const asset of state.assets) {
     const li = document.createElement('li');
     li.className = 'asset';

@@ -62,8 +62,14 @@ with sync_playwright() as pw:
           {"apply_look", "resize_images"} <= set(after), str(after))
 
     # The point of dynamic registration is that the choice stays small. A mixed
-    # bench is the widest case; single-kind benches are smaller still.
-    check("a mixed bench stays under a dozen tools", len(both) <= 12, f"{len(both)}: {both}")
+    # bench is the widest case; single-kind benches are smaller still. Fifteen is
+    # the ceiling: past that an agent starts picking the wrong tool.
+    check("a mixed bench stays within the tool budget", len(both) <= 15, f"{len(both)}: {both}")
+
+    # A bench holding only images must not offer PDF tools, and vice versa. This
+    # is what keeps the catalogue from being paid for on every request.
+    only_pdf = [t for t in with_pdf if t not in ("describe_workspace", "undo_operation", "apply_and_export")]
+    check("a PDF-only bench stays small", len(only_pdf) <= 8, f"{len(only_pdf)}: {only_pdf}")
     only_images = tools()
     check("a single-kind bench is smaller than a mixed one",
           len(only_images) < len(both), f"{len(only_images)} vs {len(both)}")

@@ -463,3 +463,43 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   aspect-ratio: auto;
   background: transparent;
 }
+
+/* --- File list ----------------------------------------------------------- */
+/* A long list of files would push the previews off the screen, so past a few
+   it collapses behind a summary the user can open. */
+
+.files-summary {
+  margin-top: 14px;
+  padding: 9px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.files-summary summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  user-select: none;
+}
+.files-summary summary:hover { color: var(--text); }
+
+.asset-list.is-collapsed { display: none; }
+
+.viewer-expand {
+  position: fixed;
+  top: 18px;
+  right: 68px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+  border-color: transparent;
+}
+.viewer-expand:hover { color: var(--text); border-color: var(--line); }
+
+/* In fullscreen the overlay is the whole screen, so the page can use all of it. */
+.viewer:fullscreen { background: #06070a; }
+.viewer:fullscreen .viewer-image { max-width: 96vw; max-height: 94vh; }
+.viewer:fullscreen .viewer-image.is-quarter-turned { max-width: 94vh; max-height: 96vw; }

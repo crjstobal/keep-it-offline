@@ -28,6 +28,21 @@ function build() {
   close.setAttribute('aria-label', 'Close');
   close.addEventListener('click', closeViewer);
 
+  // True fullscreen, not just a large overlay: judging a photograph means
+  // seeing it without the rest of the interface competing for attention.
+  const expand = document.createElement('button');
+  expand.className = 'viewer-expand';
+  expand.setAttribute('aria-label', 'Toggle fullscreen');
+  expand.title = 'Fullscreen (F)';
+  expand.innerHTML =
+    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  expand.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleFullscreen();
+  });
+
   const prev = document.createElement('button');
   prev.className = 'viewer-nav viewer-prev';
   prev.textContent = '‹';
@@ -52,7 +67,7 @@ function build() {
   });
   img.addEventListener('click', (event) => event.stopPropagation());
 
-  overlay.append(close, prev, img, next, caption);
+  overlay.append(close, expand, prev, img, next, caption);
   document.body.append(overlay);
   return { overlay, img, caption, prev, next };
 }
@@ -118,8 +133,22 @@ async function show(index) {
   }
 }
 
+export async function toggleFullscreen() {
+  if (!dom) return;
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await dom.overlay.requestFullscreen();
+  } catch (error) {
+    // Fullscreen can be refused by policy or by the user; the overlay still
+    // works, so this is not worth interrupting anyone over.
+    console.warn('[keepitoffline] fullscreen unavailable', error);
+  }
+}
+
 function onKey(event) {
-  if (event.key === 'Escape') closeViewer();
+  // Escape leaves fullscreen on its own before it would close the viewer.
+  if (event.key === 'Escape' && !document.fullscreenElement) closeViewer();
   else if (event.key === 'ArrowRight') step(1);
   else if (event.key === 'ArrowLeft') step(-1);
+  else if (event.key === 'f' || event.key === 'F') toggleFullscreen();
 }

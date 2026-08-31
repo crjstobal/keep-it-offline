@@ -220,3 +220,162 @@ declareTool({
     },
   },
 });
+
+declareTool({
+  when: hasImages,
+  definition: {
+    name: 'adjust_images',
+    description:
+      'Queue tonal and colour adjustments over one or more images. All four controls ' +
+      'run in a single pass, so pass everything you want to change in one call rather ' +
+      'than calling this repeatedly. Values run from -1 to 1, where 0 changes nothing. ' +
+      'Omit file_ids to apply to every loaded image.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        brightness: { type: 'number', minimum: -1, maximum: 1, description: 'Negative darkens.' },
+        contrast: { type: 'number', minimum: -1, maximum: 1, description: 'Negative flattens.' },
+        saturation: {
+          type: 'number',
+          minimum: -1,
+          maximum: 1,
+          description: 'Affects every colour equally. -1 is fully grey.',
+        },
+        vibrance: {
+          type: 'number',
+          minimum: -1,
+          maximum: 1,
+          description:
+            'Like saturation, but leaves already-saturated colours alone. Safer on skin tones.',
+        },
+        file_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Which images to adjust. Omit to apply to all of them.',
+        },
+      },
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ brightness, contrast, saturation, vibrance, file_ids }) => {
+      const params = { brightness, contrast, saturation, vibrance };
+      const set = Object.entries(params).filter(([, v]) => typeof v === 'number' && v !== 0);
+      if (set.length === 0) {
+        throw new Error('Give at least one non-zero adjustment.');
+      }
+      const targets = resolveImages(file_ids);
+      const described = set.map(([k, v]) => `${k} ${v > 0 ? '+' : ''}${v}`).join(', ');
+      const scope = targets.length === 1 ? targets[0].name : `${targets.length} images`;
+
+      pushOperation({
+        type: 'adjust_image',
+        assetIds: targets.map((a) => a.id),
+        params,
+        summary: `Adjust ${scope}: ${described}`,
+        source: 'agent',
+      });
+      return `Queued adjustments (${described}) over ${targets.length} image(s).`;
+    },
+  },
+});
+
+declareTool({
+  when: hasImages,
+  definition: {
+    name: 'add_vignette',
+    description:
+      'Queue a vignette, darkening the corners to draw the eye towards the middle. ' +
+      'Omit file_ids to apply to every loaded image.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        amount: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'How dark the corners go. 0.4 is a natural default, 1 is heavy.',
+        },
+        file_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Which images to vignette. Omit to apply to all of them.',
+        },
+      },
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ amount = 0.4, file_ids }) => {
+      const targets = resolveImages(file_ids);
+      const strength = Math.min(1, Math.max(0, amount));
+      const scope = targets.length === 1 ? targets[0].name : `${targets.length} images`;
+
+      pushOperation({
+        type: 'apply_vignette',
+        assetIds: targets.map((a) => a.id),
+        params: { amount: strength },
+        summary: `Vignette ${scope} at ${Math.round(strength * 100)}%`,
+        source: 'agent',
+      });
+      return `Queued a vignette over ${targets.length} image(s).`;
+    },
+  },
+});
+
+declareTool({
+  when: hasImages,
+  definition: {
+    name: 'add_watermark',
+    description:
+      'Queue a text watermark over one or more images, in one of nine positions. ' +
+      'The text is drawn in the browser: it is never sent anywhere. ' +
+      'Omit file_ids to apply to every loaded image.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The text to draw.' },
+        position: {
+          type: 'string',
+          enum: [
+            'top-left', 'top-center', 'top-right',
+            'center-left', 'center', 'center-right',
+            'bottom-left', 'bottom-center', 'bottom-right',
+          ],
+          description: 'Where to place it. Defaults to bottom-right.',
+        },
+        opacity: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'How visible the mark is. Defaults to 0.6.',
+        },
+        size: {
+          type: 'number',
+          minimum: 0.01,
+          maximum: 0.3,
+          description:
+            'Text height as a fraction of the image, so it scales with the picture. ' +
+            'Defaults to 0.05.',
+        },
+        file_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Which images to mark. Omit to apply to all of them.',
+        },
+      },
+      required: ['text'],
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ text, position = 'bottom-right', opacity = 0.6, size = 0.05, file_ids }) => {
+      if (!String(text).trim()) throw new Error('The watermark text cannot be empty.');
+      const targets = resolveImages(file_ids);
+      const scope = targets.length === 1 ? targets[0].name : `${targets.length} images`;
+
+      pushOperation({
+        type: 'add_watermark',
+        assetIds: targets.map((a) => a.id),
+        params: { text, position, opacity, size },
+        summary: `Watermark ${scope} with "${text}" (${position})`,
+        source: 'agent',
+      });
+      return `Queued a "${text}" watermark at ${position} over ${targets.length} image(s).`;
+    },
+  },
+});
