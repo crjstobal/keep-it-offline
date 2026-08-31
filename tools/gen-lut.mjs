@@ -39,6 +39,47 @@ function blackAndWhite(r, g, b) {
   return [v, v, v];
 }
 
+// Teal and orange: the standard cinema grade. Shadows lean cyan, highlights
+// lean warm, which is why it reads as "filmic" on almost any footage.
+function tealAndOrange(r, g, b) {
+  const y = LUMA.r * r + LUMA.g * g + LUMA.b * b;
+  const split = (y - 0.5) * 2; // -1 in the shadows, +1 in the highlights
+  const warm = Math.max(0, split);
+  const cool = Math.max(0, -split);
+  return [
+    r + warm * 0.16 - cool * 0.06,
+    g + warm * 0.05 + cool * 0.02,
+    b - warm * 0.12 + cool * 0.16,
+  ];
+}
+
+// Warm: a straightforward golden cast, the look of late afternoon light.
+function warm(r, g, b) {
+  return [r * 1.09 + 0.02, g * 1.02 + 0.01, b * 0.9];
+}
+
+// Cool: the opposite, for overcast and interior shots that came out yellow.
+function cool(r, g, b) {
+  return [r * 0.92, g * 0.99, b * 1.1 + 0.02];
+}
+
+// Faded: lifted blacks and pulled highlights, the washed-out film look.
+function faded(r, g, b) {
+  const lift = 0.06;
+  const squeeze = 0.88;
+  return [lift + r * squeeze, lift + g * squeeze, lift + b * squeeze * 1.02];
+}
+
+const PRESETS = [
+  ['black-and-white', 'Black and White', blackAndWhite],
+  ['teal-and-orange', 'Teal and Orange', tealAndOrange],
+  ['warm', 'Warm', warm],
+  ['cool', 'Cool', cool],
+  ['faded', 'Faded', faded],
+];
+
 mkdirSync(OUT, { recursive: true });
-writeFileSync(join(OUT, 'black-and-white.cube'), buildCube('Black and White', blackAndWhite));
-console.log('wrote black-and-white.cube');
+for (const [slug, title, fn] of PRESETS) {
+  writeFileSync(join(OUT, `${slug}.cube`), buildCube(title, fn));
+  console.log(`wrote ${slug}.cube`);
+}

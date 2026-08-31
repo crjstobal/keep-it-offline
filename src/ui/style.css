@@ -300,14 +300,14 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   line-height: 1;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: rgb(23 26 33 / 0.85);
-  color: var(--muted);
+  background: rgb(15 17 21 / 0.92);
+  color: var(--text);
   opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
+  transition: opacity 0.15s, background 0.15s;
 }
 .page-cell:hover .page-zoom,
 .page-zoom:focus-visible { opacity: 1; }
-.page-zoom:hover { color: var(--text); border-color: var(--muted); }
+.page-zoom:hover { background: var(--accent); color: #06240f; border-color: var(--accent); }
 
 /* --- Enlarged viewer ----------------------------------------------------- */
 
@@ -375,3 +375,53 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .viewer-next { right: 16px; }
 
 .page-number { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* --- Image editor -------------------------------------------------------- */
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.field select, .field input[type="number"] {
+  font: inherit;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+.field input[type="number"] { width: 82px; }
+.field input[type="range"] { width: 90px; accent-color: var(--accent); }
+#look-strength-value { font-variant-numeric: tabular-nums; min-width: 34px; }
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+.image-cell {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.image-cell img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: var(--panel-2);
+  border-radius: 4px;
+}
+.image-cell .image-name {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

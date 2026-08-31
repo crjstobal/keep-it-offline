@@ -12,11 +12,14 @@ import {
   subscribe,
 } from './core/workspace.js';
 import { isSupported, onRegistryChange, start } from './core/registry.js';
-import { pdfCall } from './core/worker-bridge.js';
+import { imageCall, pdfCall } from './core/worker-bridge.js';
+import { ensureLutLoaded } from './core/luts.js';
 import * as grid from './ui/page-grid.js';
+import * as imagePanel from './ui/image-panel.js';
 
 import './tools/workspace-tools.js';
 import './tools/pdf-tools.js';
+import './tools/image-tools.js';
 
 const els = {
   dropzone: document.getElementById('dropzone'),
@@ -34,7 +37,20 @@ const els = {
   rotateLeft: document.getElementById('rotate-left'),
   rotateRight: document.getElementById('rotate-right'),
   removeSelected: document.getElementById('remove-selected'),
+  imageEditor: document.getElementById('image-editor'),
 };
+
+imagePanel.init({
+  grid: document.getElementById('image-grid'),
+  lookSelect: document.getElementById('look-select'),
+  lookStrength: document.getElementById('look-strength'),
+  lookStrengthValue: document.getElementById('look-strength-value'),
+  applyLook: document.getElementById('apply-look'),
+  resizeWidth: document.getElementById('resize-width'),
+  applyResize: document.getElementById('apply-resize'),
+  formatSelect: document.getElementById('format-select'),
+  applyFormat: document.getElementById('apply-format'),
+});
 
 // --- Manual editing --------------------------------------------------------
 // Everything here is available with no agent attached. The tools and these
@@ -126,29 +142,54 @@ els.dropzone.addEventListener('drop', (event) => handleFiles(event.dataTransfer.
 
 // --- Export ----------------------------------------------------------------
 
+function download(bytes, type, filename) {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 async function exportAsset(assetId) {
   const asset = getAsset(assetId);
   if (!asset) return;
 
   const ops = operationsFor(asset.id);
   if (ops.length === 0) return;
+  const plain = ops.map((op) => ({ type: op.type, params: op.params }));
 
-  const { bytes } = await pdfCall('apply', {
+  if (asset.kind === 'pdf') {
+    const { bytes } = await pdfCall('apply', { bytes: asset.bytes.slice(0), operations: plain });
+    download(bytes, 'application/pdf', asset.name.replace(/\.pdf$/i, '') + '-edited.pdf');
+    return;
+  }
+
+  // Any look in the stack has to reach the worker before it can be applied.
+  for (const op of plain) {
+    if (op.type === 'apply_lut') await ensureLutLoaded(op.params.lut_name);
+  }
+
+  const result = await imageCall('process', {
     bytes: asset.bytes.slice(0),
-    operations: ops.map((op) => ({ type: op.type, params: op.params })),
+    operations: plain,
+    type: asset.meta.type,
   });
 
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = asset.name.replace(/\.pdf$/i, '') + '-edited.pdf';
-  link.click();
-  URL.revokeObjectURL(url);
+  const extension = result.type.split('/')[1].replace('jpeg', 'jpg');
+  const base = asset.name.replace(/\.[^.]+$/, '');
+  download(result.bytes, result.type, `${base}-edited.${extension}`);
+}
+
+/** Export every file that has enabled operations, for a batch. */
+async function exportAll() {
+  for (const asset of getState().assets) {
+    if (operationsFor(asset.id).length > 0) await exportAsset(asset.id);
+  }
 }
 
 els.exportBtn.addEventListener('click', () => {
-  const first = getState().assets[0];
-  if (first) exportAsset(first.id);
+  exportAll().catch((error) => console.error('[keepitoffline] export failed', error));
 });
 
 // Tools ask the UI to export rather than downloading behind the user's back.
@@ -243,6 +284,14 @@ subscribe((state) => {
 
   // Show the first PDF in the editor, and keep the grid in step with the stack
   // so a page removed by the agent greys out as soon as the tool returns.
+  const images = state.assets.filter((a) => a.kind === 'image');
+  els.imageEditor.hidden = images.length === 0;
+  if (images.length > 0) {
+    imagePanel
+      .refresh(images)
+      .catch((error) => console.error('[keepitoffline] image preview failed', error));
+  }
+
   const pdf = state.assets.find((a) => a.kind === 'pdf');
   const shown = grid.getCurrentAsset();
 

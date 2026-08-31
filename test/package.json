@@ -1,0 +1,9 @@
+{
+  "name": "keepitoffline-tests",
+  "private": true,
+  "type": "module",
+  "description": "Test suite. Run `npm install` here, then `node run-all.mjs`.",
+  "devDependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}

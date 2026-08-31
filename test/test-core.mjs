@@ -1,0 +1,47 @@
+import * as ws from '../src/core/workspace.js';
+
+let pass = 0, fail = 0;
+const check = (name, cond) => { cond ? (pass++, console.log('  ok  ' + name)) : (fail++, console.log('  FAIL ' + name)); };
+
+// Assets
+const a = ws.addAsset({ name: 'doc.pdf', kind: 'pdf', bytes: new ArrayBuffer(8), meta: { pageCount: 10 } });
+check('asset added', ws.listAssets().length === 1);
+check('asset id prefixed by kind', a.id.startsWith('pdf_'));
+check('loadedKinds tracks pdf', ws.loadedKinds().has('pdf'));
+
+const img = ws.addAsset({ name: 'p.jpg', kind: 'image', bytes: new ArrayBuffer(4), meta: { width: 100, height: 50 } });
+check('filter by kind', ws.listAssets('pdf').length === 1 && ws.listAssets('image').length === 1);
+
+// Operations
+const op1 = ws.pushOperation({ type: 'remove_pages', assetId: a.id, params: { pages: [1,3] }, summary: 'Remove 2 pages', source: 'agent' });
+const op2 = ws.pushOperation({ type: 'rotate_pages', assetId: a.id, params: { pages: [0], degrees: 90 }, summary: 'Rotate', source: 'user' });
+check('two ops queued', ws.operationsFor(a.id).length === 2);
+
+ws.setOperationEnabled(op1.id, false);
+check('disabled op excluded from operationsFor', ws.operationsFor(a.id).length === 1);
+check('disabled op still visible in state', ws.getState().operations.length === 2);
+
+ws.setOperationEnabled(op1.id, true);
+check('re-enable works', ws.operationsFor(a.id).length === 2);
+
+// Ordering
+ws.moveOperation(op2.id, 0);
+check('reorder works', ws.getState().operations[0].id === op2.id);
+
+// Removing an asset must drop its operations
+ws.removeAsset(a.id);
+check('asset removed', ws.listAssets().length === 1);
+check('orphan operations cleaned up', ws.getState().operations.length === 0);
+check('loadedKinds updated after removal', !ws.loadedKinds().has('pdf') && ws.loadedKinds().has('image'));
+
+// Subscriptions
+let calls = 0;
+const unsub = ws.subscribe(() => calls++);
+ws.pushOperation({ type: 'x', assetId: img.id, params: {}, summary: 's', source: 'user' });
+check('subscriber notified', calls === 1);
+unsub();
+ws.clearOperations();
+check('unsubscribe works', calls === 1);
+
+console.log('\n' + pass + ' passed, ' + fail + ' failed');
+process.exit(fail ? 1 : 0);

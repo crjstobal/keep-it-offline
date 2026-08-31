@@ -95,7 +95,13 @@ function fillCell(cell, index, dataUrl) {
   zoom.className = 'page-zoom';
   zoom.title = `Enlarge page ${index + 1}`;
   zoom.setAttribute('aria-label', `Enlarge page ${index + 1}`);
-  zoom.textContent = '⤢';
+  // An inline SVG rather than a glyph: the arrow characters render thin and
+  // inconsistently across platforms, and this one has to read at 24px.
+  zoom.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/>' +
+    '<path d="M10.5 7.5 v6 M7.5 10.5 h6"/></svg>';
   zoom.addEventListener('click', (event) => {
     event.stopPropagation();
     openViewer(index);

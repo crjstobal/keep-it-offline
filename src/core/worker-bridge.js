@@ -1,10 +1,12 @@
 // Promise wrapper around the workers. Each call gets an id so replies can be
 // matched up, since a batch may have several jobs in flight at once.
 
-const pending = new Map();
 let nextJobId = 1;
 
 function makeBridge(url) {
+  // Each bridge keeps its own job table: a shared one would let a reply from
+  // one worker resolve a job belonging to the other.
+  const pending = new Map();
   let worker = null;
 
   function ensure() {
@@ -37,3 +39,4 @@ function makeBridge(url) {
 }
 
 export const pdfCall = makeBridge(new URL('../workers/pdf.worker.js', import.meta.url));
+export const imageCall = makeBridge(new URL('../workers/image.worker.js', import.meta.url));

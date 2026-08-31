@@ -53,6 +53,39 @@
           </div>
           <div id="page-grid-host"></div>
         </div>
+
+        <div class="editor" id="image-editor" hidden>
+          <div class="actionbar">
+            <span class="selection-count">Applies to every loaded image</span>
+            <label class="field">
+              Look
+              <select id="look-select"></select>
+            </label>
+            <label class="field">
+              Strength
+              <input type="range" id="look-strength" min="0" max="100" value="100" />
+              <span id="look-strength-value">100%</span>
+            </label>
+            <button class="ghost" id="apply-look">Apply look</button>
+            <span class="sep" aria-hidden="true"></span>
+            <label class="field">
+              Max width
+              <input type="number" id="resize-width" min="1" placeholder="2000" />
+            </label>
+            <button class="ghost" id="apply-resize">Resize</button>
+            <label class="field">
+              Format
+              <select id="format-select">
+                <option value="">Keep</option>
+                <option value="webp">WebP</option>
+                <option value="jpeg">JPEG</option>
+                <option value="png">PNG</option>
+              </select>
+            </label>
+            <button class="ghost" id="apply-format">Convert</button>
+          </div>
+          <div class="image-grid" id="image-grid"></div>
+        </div>
       </section>
 
       <aside class="side">
