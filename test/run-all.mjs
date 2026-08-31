@@ -25,6 +25,7 @@ const BROWSER_TESTS = [
   'test-video.py',
   'test-audio.py',
   'test-redaction.py',
+  'test-mask.py',
 ];
 
 let failures = 0;

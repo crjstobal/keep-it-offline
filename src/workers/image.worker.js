@@ -117,6 +117,94 @@ function applyWatermark(context, width, height, params) {
   context.restore();
 }
 
+
+/**
+ * Cut the image to a shape, keeping what is inside and making the rest
+ * transparent.
+ *
+ * Positions and sizes are fractions of the image rather than pixels, so the
+ * same mask means the same thing on a thumbnail preview and on the full-size
+ * export, and survives a resize queued alongside it.
+ */
+function applyMask(canvas, context, params) {
+  const { width, height } = canvas;
+  const cx = (params.x ?? 0.5) * width;
+  const cy = (params.y ?? 0.5) * height;
+  // The radius is a fraction of the shorter side, so a circle stays a circle.
+  const r = (params.size ?? 0.4) * Math.min(width, height);
+
+  const shape = new Path2D();
+  switch (params.shape) {
+    case 'square':
+      shape.rect(cx - r, cy - r, r * 2, r * 2);
+      break;
+    case 'blob':
+      traceBlob(shape, cx, cy, r, params.seed ?? 1, params.points ?? 7, params.wobble ?? 0.28);
+      break;
+    case 'circle':
+    default:
+      shape.arc(cx, cy, r, 0, Math.PI * 2);
+  }
+
+  // Keep the pixels under the shape, discard the rest.
+  context.globalCompositeOperation = 'destination-in';
+  context.fillStyle = '#000';
+  context.fill(shape);
+  context.globalCompositeOperation = 'source-over';
+
+  if (params.border_width > 0) {
+    context.lineWidth = params.border_width * Math.min(width, height) * 0.02;
+    context.strokeStyle = params.border_color ?? '#ffffff';
+    context.lineJoin = 'round';
+    context.stroke(shape);
+  }
+}
+
+/**
+ * An organic closed curve: points around a circle at wobbling radii, joined
+ * with smooth curves.
+ *
+ * The randomness is seeded so the same seed always draws the same blob, which
+ * is what makes a regenerate button meaningful: each press is a new seed, and
+ * the result is reproducible rather than lost.
+ */
+function traceBlob(path, cx, cy, radius, seed, count, wobble) {
+  const random = mulberry32(seed);
+  const points = [];
+
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    const r = radius * (1 - wobble / 2 + random() * wobble);
+    points.push({ x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r });
+  }
+
+  // Draw through the midpoints so the curve closes smoothly on itself.
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  let previous = points[points.length - 1];
+  let start = mid(previous, points[0]);
+  path.moveTo(start.x, start.y);
+
+  for (let i = 0; i < points.length; i++) {
+    const current = points[i];
+    const next = points[(i + 1) % points.length];
+    const end = mid(current, next);
+    path.quadraticCurveTo(current.x, current.y, end.x, end.y);
+  }
+  path.closePath();
+}
+
+/** A small seeded generator, so a given seed always draws the same shape. */
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t += 0x6d2b79f5;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /** Fit within a box while keeping the aspect ratio. Never enlarges. */
 function fitWithin(width, height, maxWidth, maxHeight) {
   const scale = Math.min(maxWidth / width, maxHeight / height, 1);
@@ -218,6 +306,13 @@ async function processImage({ bytes, operations, type }) {
   const vignette = operations.find((op) => op.type === 'apply_vignette');
   if (vignette) applyVignette(context, width, height, vignette.params.amount ?? 0.4);
 
+  const mask = operations.find((op) => op.type === 'apply_mask');
+  if (mask) {
+    applyMask(canvas, context, mask.params);
+    // A cut-out needs an alpha channel, so the output has to be PNG or WebP.
+    if (outputType === 'image/jpeg') outputType = 'image/png';
+  }
+
   const watermark = operations.find((op) => op.type === 'add_watermark');
   if (watermark) applyWatermark(context, width, height, watermark.params);
 
@@ -226,6 +321,9 @@ async function processImage({ bytes, operations, type }) {
     outputType = `image/${convert.params.format}`;
     if (convert.params.quality != null) quality = convert.params.quality;
   }
+  // A mask cuts holes, and JPEG has no alpha channel to hold them: choosing
+  // JPEG alongside a mask would quietly fill the cut-out with black.
+  if (mask && outputType === 'image/jpeg') outputType = 'image/png';
 
   // PNG ignores quality; passing it anyway is harmless.
   const blob = await canvas.convertToBlob({ type: outputType, quality });

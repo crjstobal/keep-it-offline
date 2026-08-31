@@ -31,6 +31,7 @@ let draft = {
   saturation: 0,
   vibrance: 0,
   vignette: 0,
+  mask: null,
 };
 /** Guards against overlapping preview renders when the slider is dragged. */
 let previewToken = 0;
@@ -207,6 +208,55 @@ export function init(elements) {
     els.watermarkText.value = '';
   });
 
+  // Masking: the shape previews as it is dragged into place, and a blob keeps a
+  // seed so Reshuffle can offer a genuinely different shape rather than nudging
+  // the same one.
+  const readMask = () => {
+    const shape = els.maskShape.value;
+    if (!shape) return null;
+    return {
+      shape,
+      x: Number(els.maskX.value) / 100,
+      y: Number(els.maskY.value) / 100,
+      size: Number(els.maskSize.value) / 100,
+      seed: draft.mask?.seed ?? Math.floor(Math.random() * 100000),
+      border_width: Number(els.maskBorder.value) / 10,
+      border_color: els.maskBorderColor.value,
+    };
+  };
+
+  const updateMask = () => {
+    draft.mask = readMask();
+    els.applyMask.disabled = !draft.mask;
+    els.reshuffleBlob.hidden = els.maskShape.value !== 'blob';
+    schedulePreview();
+  };
+
+  els.maskShape.addEventListener('change', () => {
+    // A new shape gets a new seed, so switching to blob is not always the same one.
+    draft.mask = null;
+    updateMask();
+  });
+  for (const control of [els.maskSize, els.maskX, els.maskY, els.maskBorder]) {
+    control.addEventListener('input', updateMask);
+  }
+  els.maskBorderColor.addEventListener('input', updateMask);
+
+  els.reshuffleBlob.addEventListener('click', () => {
+    if (!draft.mask) return;
+    draft.mask = { ...draft.mask, seed: Math.floor(Math.random() * 100000) };
+    schedulePreview();
+  });
+
+  els.applyMask.addEventListener('click', () => {
+    if (!draft.mask) return;
+    queueForAll('apply_mask', { ...draft.mask }, `Mask ${scopeOfImages()} to a ${draft.mask.shape}`);
+    draft.mask = null;
+    els.maskShape.value = '';
+    els.applyMask.disabled = true;
+    els.reshuffleBlob.hidden = true;
+  });
+
   els.applyLook.disabled = true;
 }
 
@@ -278,6 +328,9 @@ function previewOperations(assetId) {
   }
   if (draft.vignette > 0) {
     ops.push({ type: 'apply_vignette', params: { amount: draft.vignette } });
+  }
+  if (draft.mask) {
+    ops.push({ type: 'apply_mask', params: { ...draft.mask } });
   }
   return ops;
 }

@@ -90,6 +90,14 @@ imagePanel.init({
   watermarkText: document.getElementById('watermark-text'),
   watermarkPosition: document.getElementById('watermark-position'),
   applyWatermark: document.getElementById('apply-watermark'),
+  maskShape: document.getElementById('mask-shape'),
+  maskSize: document.getElementById('mask-size'),
+  maskX: document.getElementById('mask-x'),
+  maskY: document.getElementById('mask-y'),
+  maskBorder: document.getElementById('mask-border'),
+  maskBorderColor: document.getElementById('mask-border-color'),
+  reshuffleBlob: document.getElementById('reshuffle-blob'),
+  applyMask: document.getElementById('apply-mask'),
 });
 
 // --- Manual editing --------------------------------------------------------
@@ -128,11 +136,16 @@ thumbSize.addEventListener('input', () => {
 });
 els.gridHost.style.setProperty('--thumb-size', `${thumbSize.value}px`);
 
-const imageThumbSize = document.getElementById('image-thumb-size');
-imageThumbSize.addEventListener('input', () => {
-  imagePanel.setThumbSize(Number(imageThumbSize.value));
-});
-imagePanel.setThumbSize(Number(imageThumbSize.value));
+// Each grid has its own size control, since a contact sheet of photographs and
+// a row of video players want very different defaults.
+for (const [id, apply] of [
+  ['image-thumb-size', (value) => imagePanel.setThumbSize(value)],
+  ['video-thumb-size', (value) => videoPanel.setThumbSize(value)],
+]) {
+  const slider = document.getElementById(id);
+  slider.addEventListener('input', () => apply(Number(slider.value)));
+  apply(Number(slider.value));
+}
 
 els.removeSelected.addEventListener('click', () => grid.removeSelected(els.gridHost));
 els.rotateLeft.addEventListener('click', () => grid.rotateSelected(els.gridHost, 270));
@@ -394,12 +407,27 @@ function renderAssets(state) {
   els.assetList.classList.toggle('is-collapsed', many && !summary.open);
 
   if (many) {
-    const counts = { pdf: 0, image: 0 };
-    for (const asset of state.assets) counts[asset.kind]++;
-    const parts = [];
-    if (counts.pdf) parts.push(`${counts.pdf} PDF${counts.pdf === 1 ? '' : 's'}`);
-    if (counts.image) parts.push(`${counts.image} image${counts.image === 1 ? '' : 's'}`);
-    summary.querySelector('summary').textContent = `${parts.join(' and ')} on the bench`;
+    // Count every kind, not just the two that existed when this was written:
+    // a bench holding a video and a track should say so.
+    const counts = {};
+    for (const asset of state.assets) counts[asset.kind] = (counts[asset.kind] ?? 0) + 1;
+
+    const names = {
+      pdf: ['PDF', 'PDFs'],
+      image: ['image', 'images'],
+      video: ['video', 'videos'],
+      audio: ['track', 'tracks'],
+    };
+    const parts = Object.entries(counts).map(([kind, n]) => {
+      const [one, many_] = names[kind] ?? [kind, `${kind}s`];
+      return `${n} ${n === 1 ? one : many_}`;
+    });
+
+    const listed =
+      parts.length <= 1
+        ? parts.join('')
+        : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+    summary.querySelector('summary').textContent = `${listed} on the bench`;
   }
 
   for (const asset of state.assets) {

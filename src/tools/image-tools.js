@@ -446,3 +446,73 @@ declareTool({
     },
   },
 });
+
+declareTool({
+  when: hasImages,
+  definition: {
+    name: 'mask_images',
+    description:
+      'Queue a mask that keeps a shape and makes everything outside it transparent, for ' +
+      'a circular avatar or an organic cut-out. Position and size are fractions of the ' +
+      'image (0.5, 0.5 is the centre), so the mask means the same thing whatever size the ' +
+      'image is exported at. The output becomes PNG when needed, since JPEG cannot hold ' +
+      'transparency. Omit file_ids to apply to every loaded image.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        shape: {
+          type: 'string',
+          enum: ['circle', 'square', 'blob'],
+          description: 'circle for avatars, blob for an organic hand-cut look.',
+        },
+        x: { type: 'number', minimum: 0, maximum: 1, description: 'Centre across, 0 to 1. Defaults to 0.5.' },
+        y: { type: 'number', minimum: 0, maximum: 1, description: 'Centre down, 0 to 1. Defaults to 0.5.' },
+        size: {
+          type: 'number',
+          minimum: 0.05,
+          maximum: 0.5,
+          description: 'Radius as a fraction of the shorter side. Defaults to 0.4.',
+        },
+        seed: {
+          type: 'integer',
+          description: 'Which blob to draw. Any integer gives a different shape, and the same one always gives the same shape.',
+        },
+        border_width: {
+          type: 'number',
+          minimum: 0,
+          maximum: 5,
+          description: 'Optional outline thickness. 0 for none.',
+        },
+        border_color: { type: 'string', description: 'Outline colour, e.g. "#ffffff".' },
+        file_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Which images to mask. Omit to apply to all of them.',
+        },
+      },
+      required: ['shape'],
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ shape, x = 0.5, y = 0.5, size = 0.4, seed, border_width = 0, border_color, file_ids }) => {
+      const targets = resolveImages(file_ids);
+      const scope = targets.length === 1 ? targets[0].name : `${targets.length} images`;
+
+      pushOperation({
+        type: 'apply_mask',
+        assetIds: targets.map((a) => a.id),
+        params: {
+          shape,
+          x,
+          y,
+          size,
+          seed: seed ?? Math.floor(Math.random() * 100000),
+          border_width,
+          border_color,
+        },
+        summary: `Mask ${scope} to a ${shape}`,
+        source: 'agent',
+      });
+      return `Queued a ${shape} mask over ${scope}. Everything outside the shape becomes transparent, and the export will be a PNG so the transparency survives.`;
+    },
+  },
+});

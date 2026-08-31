@@ -67,6 +67,7 @@ export function refresh(list) {
     const output = plan(asset.meta, ops);
 
     entry.timeline.setRange(output.start, output.end);
+    entry.times.show(output.start, output.end);
     entry.meta.textContent =
       `${output.duration.toFixed(1)}s` +
       (Math.abs(output.duration - asset.meta.duration) > 0.05
@@ -96,6 +97,14 @@ function buildRow(asset) {
   const meta = document.createElement('span');
   meta.className = 'audio-meta';
 
+  const times = buildTimeFields({
+    duration: asset.meta.duration,
+    onCommit: (start, end) => {
+      pending.set(asset.id, { start, end });
+      timeline.setRange(start, end);
+    },
+  });
+
   const trimButton = document.createElement('button');
   trimButton.className = 'ghost';
   trimButton.textContent = 'Trim to selection';
@@ -105,7 +114,7 @@ function buildRow(asset) {
   zoomOut.textContent = 'Fit';
   zoomOut.title = 'Reset zoom (scroll on the waveform to zoom)';
 
-  header.append(play, name, meta, zoomOut, trimButton);
+  header.append(play, name, meta, times.element, zoomOut, trimButton);
 
   const timelineHost = document.createElement('div');
   timelineHost.className = 'timeline-host';
@@ -123,8 +132,9 @@ function buildRow(asset) {
     duration: asset.meta.duration,
     peaks: () => asset.meta.peaks,
     onChange: (start, end) => {
-      // Dragging the handles is the trim: the numbers follow the picture.
+      // Dragging the handles is the trim, and the boxes follow the picture.
       pending.set(asset.id, { start, end });
+      times.show(start, end);
     },
     onScrub: (time) => {
       audio.currentTime = time;
@@ -179,10 +189,13 @@ function buildRow(asset) {
     });
   });
 
+  times.show(0, asset.meta.duration);
+
   tracks.set(asset.id, {
     audio,
     timeline,
     meta,
+    times,
     destroy() {
       cancelAnimationFrame(raf);
       audio.pause();
@@ -204,3 +217,72 @@ const playIcon = () =>
 const pauseIcon = () =>
   '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">' +
   '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+
+/**
+ * The start and end boxes that sit beside a timeline.
+ *
+ * Dragging is how you find a cut; typing is how you say exactly where it goes,
+ * and seeing the numbers is how you check the handles landed where you meant.
+ * Both directions stay in step: dragging updates the boxes, typing moves the
+ * handles.
+ */
+function buildTimeFields({ duration, onCommit }) {
+  const wrap = document.createElement('span');
+  wrap.className = 'time-fields';
+
+  const make = (label) => {
+    const field = document.createElement('label');
+    field.className = 'field';
+    const text = document.createElement('span');
+    text.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.max = String(duration.toFixed(2));
+    input.step = '0.1';
+    input.className = 'time-input';
+    field.append(text, input);
+    return { field, input };
+  };
+
+  const from = make('From');
+  const to = make('To');
+  const unit = document.createElement('span');
+  unit.className = 'hint-inline';
+  unit.textContent = 's';
+
+  wrap.append(from.field, to.field, unit);
+
+  const clampAndCommit = () => {
+    let start = Number(from.input.value);
+    let end = Number(to.input.value);
+    if (!Number.isFinite(start)) start = 0;
+    if (!Number.isFinite(end)) end = duration;
+
+    start = Math.min(Math.max(0, start), duration - 0.1);
+    end = Math.min(Math.max(start + 0.1, end), duration);
+
+    from.input.value = start.toFixed(2);
+    to.input.value = end.toFixed(2);
+    onCommit(start, end);
+  };
+
+  for (const input of [from.input, to.input]) {
+    input.addEventListener('change', clampAndCommit);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        clampAndCommit();
+      }
+    });
+  }
+
+  return {
+    element: wrap,
+    /** Reflect a drag without firing onCommit back at the timeline. */
+    show(start, end) {
+      if (document.activeElement !== from.input) from.input.value = start.toFixed(2);
+      if (document.activeElement !== to.input) to.input.value = end.toFixed(2);
+    },
+  };
+}

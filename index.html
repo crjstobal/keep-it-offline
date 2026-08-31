@@ -166,6 +166,37 @@
             <button class="ghost" id="apply-watermark">Add</button>
           </div>
           <div class="actionbar actionbar-secondary">
+            <label class="field">
+              Mask
+              <select id="mask-shape">
+                <option value="">None</option>
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+                <option value="blob">Blob</option>
+              </select>
+            </label>
+            <label class="field">
+              Size
+              <input type="range" class="adj" id="mask-size" min="5" max="50" value="40" />
+            </label>
+            <label class="field">
+              X
+              <input type="range" class="adj" id="mask-x" min="0" max="100" value="50" />
+            </label>
+            <label class="field">
+              Y
+              <input type="range" class="adj" id="mask-y" min="0" max="100" value="50" />
+            </label>
+            <label class="field">
+              Border
+              <input type="range" class="adj" id="mask-border" min="0" max="50" value="0" />
+            </label>
+            <input type="color" id="mask-border-color" value="#ffffff"
+                   aria-label="Border colour" />
+            <button class="ghost" id="reshuffle-blob" hidden>Reshuffle</button>
+            <button class="ghost" id="apply-mask" disabled>Apply mask</button>
+          </div>
+          <div class="actionbar actionbar-secondary">
             <span class="hint-inline">Everything here previews live. Apply adds one step to the stack.</span>
             <span class="sep" aria-hidden="true"></span>
             <label class="field zoom-field">
@@ -198,8 +229,14 @@
             </label>
           </div>
           <div class="actionbar actionbar-secondary">
-            <span class="hint-inline">Play a clip and drag the handles to choose a cut. Scroll the
-              timeline to zoom. Every frame is processed in this tab.</span>
+            <span class="hint-inline">Play a clip and drag the handles to choose a cut, or type the
+              times. Scroll the timeline to zoom. Every frame is processed in this tab.</span>
+            <span class="sep" aria-hidden="true"></span>
+            <label class="field zoom-field">
+              <span class="zoom-icon" aria-hidden="true">◻</span>
+              <input type="range" id="video-thumb-size" min="240" max="900" value="460"
+                     aria-label="Video size" />
+            </label>
           </div>
           <div class="video-grid" id="video-grid"></div>
         </div>
