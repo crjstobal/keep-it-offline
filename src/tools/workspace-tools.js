@@ -31,7 +31,7 @@ declareTool({
         })),
         pending_operations: state.operations.map((op) => ({
           operation_id: op.id,
-          file_id: op.assetId,
+          file_ids: op.assetIds,
           type: op.type,
           summary: op.summary,
           enabled: op.enabled,

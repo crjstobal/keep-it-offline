@@ -123,7 +123,7 @@ declareTool({
       }
       pushOperation({
         type: 'remove_pages',
-        assetId: asset.id,
+        assetIds: asset.id,
         params: { pages: indices },
         summary: `Remove ${indices.length} page${indices.length === 1 ? '' : 's'}: ${sorted.join(', ')}`,
         source: 'agent',
@@ -169,7 +169,7 @@ declareTool({
       const indices = toIndices(pages, asset.meta.pageCount);
       pushOperation({
         type: 'rotate_pages',
-        assetId: asset.id,
+        assetIds: asset.id,
         params: { pages: indices, degrees: deg },
         summary: `Rotate ${indices.length} page(s) by ${deg}°`,
         source: 'agent',

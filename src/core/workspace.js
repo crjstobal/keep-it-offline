@@ -49,8 +49,13 @@ export function addAsset({ name, kind, bytes, meta = {} }) {
 export function removeAsset(id) {
   const before = state.assets.length;
   state.assets = state.assets.filter((a) => a.id !== id);
-  // Operations that targeted a removed asset are meaningless now.
-  state.operations = state.operations.filter((op) => op.assetId !== id);
+  // Drop the file from any operation that covered it, and drop operations that
+  // are left covering nothing. A batch over forty images survives one of them
+  // being removed.
+  for (const op of state.operations) {
+    op.assetIds = op.assetIds.filter((assetId) => assetId !== id);
+  }
+  state.operations = state.operations.filter((op) => op.assetIds.length > 0);
   if (state.assets.length !== before) notify();
 }
 
@@ -72,18 +77,25 @@ export function loadedKinds() {
 // wrong call from either side costs one click to undo.
 
 /**
+ * Queue an operation over one or more files.
+ *
+ * One operation can cover many files on purpose: grading forty photographs is a
+ * single thing the user did, and it should be one line in the stack that undoes
+ * in one click, not forty identical entries.
+ *
  * @param {Object} op
- * @param {string} op.type      e.g. 'remove_pages'
- * @param {string} op.assetId
+ * @param {string} op.type                 e.g. 'remove_pages'
+ * @param {string|string[]} op.assetIds    One id or several.
  * @param {Object} op.params
- * @param {string} op.summary   Human-readable, shown in the stack UI.
+ * @param {string} op.summary              Human-readable, shown in the stack UI.
  * @param {'agent'|'user'} op.source
  */
-export function pushOperation({ type, assetId, params, summary, source = 'user' }) {
+export function pushOperation({ type, assetIds, params, summary, source = 'user' }) {
+  const ids = Array.isArray(assetIds) ? [...assetIds] : [assetIds];
   const op = {
     id: makeId('op'),
     type,
-    assetId,
+    assetIds: ids,
     params,
     summary,
     source,
@@ -122,7 +134,7 @@ export function clearOperations() {
   notify();
 }
 
-/** Enabled operations for one asset, in stack order. */
+/** Enabled operations covering one asset, in stack order. */
 export function operationsFor(assetId) {
-  return state.operations.filter((op) => op.assetId === assetId && op.enabled);
+  return state.operations.filter((op) => op.enabled && op.assetIds.includes(assetId));
 }

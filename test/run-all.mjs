@@ -9,7 +9,13 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const NODE_TESTS = ['test-core.mjs', 'test-lut.mjs', 'test-luts-all.mjs', 'test-pdf-preview.mjs'];
-const BROWSER_TESTS = ['test-ui.py', 'test-registry.py', 'test-image-pipeline.py', 'test-image-ui.py'];
+const BROWSER_TESTS = [
+  'test-ui.py',
+  'test-registry.py',
+  'test-image-pipeline.py',
+  'test-image-ui.py',
+  'test-image-live.py',
+];
 
 let failures = 0;
 

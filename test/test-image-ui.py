@@ -22,7 +22,7 @@ with sync_playwright() as pw:
     p.wait_for_timeout(2000)
 
     check("image editor appears once an image is loaded", p.locator("#image-editor").is_visible())
-    check("all five looks are offered", p.locator("#look-select option").count() == 5,
+    check("five looks plus a neutral entry are offered", p.locator("#look-select option").count() == 6,
           str(p.locator("#look-select option").count()))
     check("a preview thumbnail is rendered", p.locator(".image-cell img").count() == 1)
 

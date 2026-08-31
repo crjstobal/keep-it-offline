@@ -50,6 +50,11 @@
             <button class="ghost" id="rotate-left" disabled>Rotate ↺</button>
             <button class="ghost" id="rotate-right" disabled>Rotate ↻</button>
             <button class="danger" id="remove-selected" disabled>Remove selected</button>
+            <label class="field zoom-field">
+              <span class="zoom-icon" aria-hidden="true">◻</span>
+              <input type="range" id="thumb-size" min="90" max="280" value="130"
+                     aria-label="Thumbnail size" />
+            </label>
           </div>
           <div id="page-grid-host"></div>
         </div>
@@ -83,6 +88,15 @@
               </select>
             </label>
             <button class="ghost" id="apply-format">Convert</button>
+          </div>
+          <div class="actionbar actionbar-secondary">
+            <span class="hint-inline">The look previews live. Apply adds one step to the stack.</span>
+            <span class="sep" aria-hidden="true"></span>
+            <label class="field zoom-field">
+              <span class="zoom-icon" aria-hidden="true">◻</span>
+              <input type="range" id="image-thumb-size" min="120" max="360" value="180"
+                     aria-label="Thumbnail size" />
+            </label>
           </div>
           <div class="image-grid" id="image-grid"></div>
         </div>

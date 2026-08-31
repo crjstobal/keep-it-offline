@@ -101,15 +101,16 @@ declareTool({
         .filter(Boolean)
         .join(', ');
 
-      for (const asset of targets) {
-        pushOperation({
-          type: 'resize_images',
-          assetId: asset.id,
-          params: { max_width, max_height },
-          summary: `Resize to fit ${box}`,
-          source: 'agent',
-        });
-      }
+      pushOperation({
+        type: 'resize_images',
+        assetIds: targets.map((a) => a.id),
+        params: { max_width, max_height },
+        summary:
+          targets.length === 1
+            ? `Resize ${targets[0].name} to fit ${box}`
+            : `Resize ${targets.length} images to fit ${box}`,
+        source: 'agent',
+      });
       return `Queued a resize of ${targets.length} image(s) to fit ${box}. Nothing has been written yet: the user can see the operations and undo any of them.`;
     },
   },
@@ -154,18 +155,17 @@ declareTool({
       const targets = resolveImages(file_ids);
       const strength = Math.min(1, Math.max(0, intensity));
 
-      for (const asset of targets) {
-        pushOperation({
-          type: 'apply_lut',
-          assetId: asset.id,
-          params: { lut_name: look, intensity: strength },
-          summary:
-            strength === 1
-              ? `Apply the ${look} look`
-              : `Apply the ${look} look at ${Math.round(strength * 100)}%`,
-          source: 'agent',
-        });
-      }
+      const scope = targets.length === 1 ? targets[0].name : `${targets.length} images`;
+      pushOperation({
+        type: 'apply_lut',
+        assetIds: targets.map((a) => a.id),
+        params: { lut_name: look, intensity: strength },
+        summary:
+          strength === 1
+            ? `Apply the ${look} look to ${scope}`
+            : `Apply the ${look} look at ${Math.round(strength * 100)}% to ${scope}`,
+        source: 'agent',
+      });
       return `Queued the ${look} look over ${targets.length} image(s)${
         strength === 1 ? '' : ` at ${Math.round(strength * 100)}% strength`
       }. The pixels stayed in the browser.`;
@@ -206,15 +206,16 @@ declareTool({
     annotations: { readOnlyHint: false },
     execute: async ({ format, quality, file_ids }) => {
       const targets = resolveImages(file_ids);
-      for (const asset of targets) {
-        pushOperation({
-          type: 'convert_format',
-          assetId: asset.id,
-          params: { format, quality },
-          summary: `Convert to ${format.toUpperCase()}`,
-          source: 'agent',
-        });
-      }
+      pushOperation({
+        type: 'convert_format',
+        assetIds: targets.map((a) => a.id),
+        params: { format, quality },
+        summary:
+          targets.length === 1
+            ? `Convert ${targets[0].name} to ${format.toUpperCase()}`
+            : `Convert ${targets.length} images to ${format.toUpperCase()}`,
+        source: 'agent',
+      });
       return `Queued a conversion of ${targets.length} image(s) to ${format.toUpperCase()}.`;
     },
   },

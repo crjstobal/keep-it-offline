@@ -76,6 +76,20 @@ for (const button of document.querySelectorAll('[data-select]')) {
   });
 }
 
+// One control sizes each grid, so a long document can be scanned at a glance or
+// inspected closely without leaving the page.
+const thumbSize = document.getElementById('thumb-size');
+thumbSize.addEventListener('input', () => {
+  els.gridHost.style.setProperty('--thumb-size', `${thumbSize.value}px`);
+});
+els.gridHost.style.setProperty('--thumb-size', `${thumbSize.value}px`);
+
+const imageThumbSize = document.getElementById('image-thumb-size');
+imageThumbSize.addEventListener('input', () => {
+  imagePanel.setThumbSize(Number(imageThumbSize.value));
+});
+imagePanel.setThumbSize(Number(imageThumbSize.value));
+
 els.removeSelected.addEventListener('click', () => grid.removeSelected(els.gridHost));
 els.rotateLeft.addEventListener('click', () => grid.rotateSelected(els.gridHost, 270));
 els.rotateRight.addEventListener('click', () => grid.rotateSelected(els.gridHost, 90));

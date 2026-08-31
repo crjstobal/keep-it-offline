@@ -7,6 +7,7 @@
 import { operationsFor, pushOperation } from '../core/workspace.js';
 import { previewPages } from '../core/preview.js';
 import { renderFullPage, renderThumbnails } from '../core/thumbnails.js';
+import { openViewer as openSharedViewer } from './viewer.js';
 
 /** Pages the user has ticked, as source indices. */
 const selection = new Set();
@@ -194,7 +195,7 @@ export function removeSelected(container) {
 
   pushOperation({
     type: 'remove_pages',
-    assetId: currentAsset.id,
+    assetIds: currentAsset.id,
     params: { pages },
     summary: `Remove ${pages.length} page${pages.length === 1 ? '' : 's'}: ${pages.map((i) => i + 1).join(', ')}`,
     source: 'user',
@@ -208,7 +209,7 @@ export function rotateSelected(container, deg) {
   const pages = getSelection();
   pushOperation({
     type: 'rotate_pages',
-    assetId: currentAsset.id,
+    assetIds: currentAsset.id,
     params: { pages, degrees: deg },
     summary: `Rotate ${pages.length} page${pages.length === 1 ? '' : 's'} by ${deg}°`,
     source: 'user',
@@ -246,86 +247,18 @@ export function getCurrentAsset() {
 
 // --- Enlarged viewer -------------------------------------------------------
 
-let viewer = null;
-let viewerIndex = 0;
-
-function buildViewer() {
-  const overlay = document.createElement('div');
-  overlay.className = 'viewer';
-  overlay.hidden = true;
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-modal', 'true');
-  overlay.setAttribute('aria-label', 'Enlarged page');
-
-  const img = document.createElement('img');
-  img.className = 'viewer-image';
-
-  const caption = document.createElement('div');
-  caption.className = 'viewer-caption';
-
-  const close = document.createElement('button');
-  close.className = 'viewer-close';
-  close.textContent = '×';
-  close.setAttribute('aria-label', 'Close');
-  close.addEventListener('click', closeViewer);
-
-  const prev = document.createElement('button');
-  prev.className = 'viewer-nav viewer-prev';
-  prev.textContent = '‹';
-  prev.setAttribute('aria-label', 'Previous page');
-  prev.addEventListener('click', (event) => {
-    event.stopPropagation();
-    step(-1);
-  });
-
-  const next = document.createElement('button');
-  next.className = 'viewer-nav viewer-next';
-  next.textContent = '›';
-  next.setAttribute('aria-label', 'Next page');
-  next.addEventListener('click', (event) => {
-    event.stopPropagation();
-    step(1);
-  });
-
-  // Clicking the backdrop closes, but clicking the page itself does not.
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) closeViewer();
-  });
-  img.addEventListener('click', (event) => event.stopPropagation());
-
-  overlay.append(close, prev, img, next, caption);
-  document.body.append(overlay);
-  return { overlay, img, caption };
-}
-
-function step(delta) {
+/** Open the shared viewer over this document's pages. */
+export function openViewer(index) {
   if (!currentAsset) return;
-  const total = currentAsset.meta.pageCount;
-  viewerIndex = (viewerIndex + delta + total) % total;
-  showInViewer(viewerIndex);
-}
-
-async function showInViewer(index) {
-  if (!viewer || !currentAsset) return;
   const asset = currentAsset;
-
-  // Show the thumbnail immediately so the viewer is never blank, then swap in
-  // the full-size render when it is ready.
-  viewer.img.src = thumbs[index] ?? '';
-  viewer.img.alt = `Page ${index + 1}`;
-  viewer.caption.textContent = `Page ${index + 1} of ${asset.meta.pageCount}`;
-
-  const rotation = rotationFor(index);
-  viewer.img.style.rotate = `${rotation}deg`;
-  viewer.img.classList.toggle('is-quarter-turned', rotation === 90 || rotation === 270);
-
-  try {
-    const full = await renderFullPage(asset.id, asset.bytes, index);
-    // The user may have moved on while that rendered.
-    if (currentAsset?.id === asset.id && viewerIndex === index) viewer.img.src = full;
-  } catch (error) {
-    console.error('[keepitoffline] could not render full page', error);
-  }
+  openSharedViewer({
+    index,
+    total: asset.meta.pageCount,
+    caption: (i) => `Page ${i + 1} of ${asset.meta.pageCount}`,
+    rotation: (i) => rotationFor(i),
+    placeholder: (i) => thumbs[i] ?? '',
+    resolve: (i) => renderFullPage(asset.id, asset.bytes, i),
+  });
 }
 
 /** Rotation the stack currently applies to a source page, for the viewer. */
@@ -336,28 +269,4 @@ function rotationFor(sourceIndex) {
     (p) => p.sourceIndex === sourceIndex,
   );
   return page?.rotation ?? 0;
-}
-
-export function openViewer(index) {
-  if (!viewer) viewer = buildViewer();
-  viewerIndex = index;
-  showInViewer(index);
-  viewer.overlay.hidden = false;
-  document.addEventListener('keydown', onViewerKey);
-}
-
-export function closeViewer() {
-  if (!viewer) return;
-  viewer.overlay.hidden = true;
-  document.removeEventListener('keydown', onViewerKey);
-}
-
-function onViewerKey(event) {
-  if (event.key === 'Escape') closeViewer();
-  else if (event.key === 'ArrowRight') step(1);
-  else if (event.key === 'ArrowLeft') step(-1);
-}
-
-export function isViewerOpen() {
-  return Boolean(viewer && !viewer.overlay.hidden);
 }

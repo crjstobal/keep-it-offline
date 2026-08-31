@@ -13,8 +13,8 @@ const img = ws.addAsset({ name: 'p.jpg', kind: 'image', bytes: new ArrayBuffer(4
 check('filter by kind', ws.listAssets('pdf').length === 1 && ws.listAssets('image').length === 1);
 
 // Operations
-const op1 = ws.pushOperation({ type: 'remove_pages', assetId: a.id, params: { pages: [1,3] }, summary: 'Remove 2 pages', source: 'agent' });
-const op2 = ws.pushOperation({ type: 'rotate_pages', assetId: a.id, params: { pages: [0], degrees: 90 }, summary: 'Rotate', source: 'user' });
+const op1 = ws.pushOperation({ type: 'remove_pages', assetIds: a.id, params: { pages: [1,3] }, summary: 'Remove 2 pages', source: 'agent' });
+const op2 = ws.pushOperation({ type: 'rotate_pages', assetIds: a.id, params: { pages: [0], degrees: 90 }, summary: 'Rotate', source: 'user' });
 check('two ops queued', ws.operationsFor(a.id).length === 2);
 
 ws.setOperationEnabled(op1.id, false);
@@ -37,11 +37,31 @@ check('loadedKinds updated after removal', !ws.loadedKinds().has('pdf') && ws.lo
 // Subscriptions
 let calls = 0;
 const unsub = ws.subscribe(() => calls++);
-ws.pushOperation({ type: 'x', assetId: img.id, params: {}, summary: 's', source: 'user' });
+ws.pushOperation({ type: 'x', assetIds: img.id, params: {}, summary: 's', source: 'user' });
 check('subscriber notified', calls === 1);
 unsub();
 ws.clearOperations();
 check('unsubscribe works', calls === 1);
+
+// One operation covering several files is a single line in the stack, and one
+// click to undo, rather than one entry per file.
+const m1 = ws.addAsset({ name: 'a.jpg', kind: 'image', bytes: new ArrayBuffer(2), meta: {} });
+const m2 = ws.addAsset({ name: 'b.jpg', kind: 'image', bytes: new ArrayBuffer(2), meta: {} });
+const m3 = ws.addAsset({ name: 'c.jpg', kind: 'image', bytes: new ArrayBuffer(2), meta: {} });
+ws.clearOperations();
+const batch = ws.pushOperation({ type: 'apply_lut', assetIds: [m1.id, m2.id, m3.id], params: { lut_name: 'warm' }, summary: 'Apply warm to 3 images', source: 'user' });
+check('a batch is one operation, not three', ws.getState().operations.length === 1);
+check('the batch covers every file', [m1,m2,m3].every(a => ws.operationsFor(a.id).length === 1));
+
+ws.setOperationEnabled(batch.id, false);
+check('disabling the batch clears it from every file', [m1,m2,m3].every(a => ws.operationsFor(a.id).length === 0));
+ws.setOperationEnabled(batch.id, true);
+
+ws.removeAsset(m2.id);
+check('removing one file keeps the batch for the others', ws.getState().operations.length === 1);
+check('the removed file is dropped from the batch', batch.assetIds.length === 2 && !batch.assetIds.includes(m2.id));
+ws.removeAsset(m1.id); ws.removeAsset(m3.id);
+check('a batch covering nothing is discarded', ws.getState().operations.length === 0);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
