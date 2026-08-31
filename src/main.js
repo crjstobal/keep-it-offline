@@ -1,0 +1,226 @@
+// Entry point. The app is fully usable with no agent attached: WebMCP only ever
+// adds a second way to drive the same state.
+
+import {
+  addAsset,
+  getAsset,
+  getState,
+  operationsFor,
+  removeAsset,
+  removeOperation,
+  setOperationEnabled,
+  subscribe,
+} from './core/workspace.js';
+import { isSupported, onRegistryChange, start } from './core/registry.js';
+import { pdfCall } from './core/worker-bridge.js';
+
+import './tools/workspace-tools.js';
+import './tools/pdf-tools.js';
+
+const els = {
+  dropzone: document.getElementById('dropzone'),
+  fileInput: document.getElementById('file-input'),
+  assetList: document.getElementById('asset-list'),
+  opList: document.getElementById('op-list'),
+  toolList: document.getElementById('tool-list'),
+  toolsHint: document.getElementById('tools-hint'),
+  exportBtn: document.getElementById('export-btn'),
+  agentStatus: document.getElementById('agent-status'),
+  agentStatusText: document.getElementById('agent-status-text'),
+};
+
+// --- Loading files ---------------------------------------------------------
+
+async function ingest(file) {
+  const bytes = await file.arrayBuffer();
+
+  if (file.type === 'application/pdf') {
+    // The worker needs its own copy: posting an ArrayBuffer transfers it.
+    const meta = await pdfCall('describe', { bytes: bytes.slice(0) });
+    addAsset({ name: file.name, kind: 'pdf', bytes, meta });
+    return;
+  }
+
+  if (file.type.startsWith('image/')) {
+    const bitmap = await createImageBitmap(file);
+    addAsset({
+      name: file.name,
+      kind: 'image',
+      bytes,
+      meta: { width: bitmap.width, height: bitmap.height, type: file.type },
+    });
+    bitmap.close();
+    return;
+  }
+
+  console.warn('[keepitoffline] unsupported file type', file.type, file.name);
+}
+
+async function handleFiles(fileList) {
+  for (const file of fileList) {
+    try {
+      await ingest(file);
+    } catch (error) {
+      console.error('[keepitoffline] could not load', file.name, error);
+    }
+  }
+}
+
+els.dropzone.addEventListener('click', () => els.fileInput.click());
+els.dropzone.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    els.fileInput.click();
+  }
+});
+els.fileInput.addEventListener('change', (event) => handleFiles(event.target.files));
+
+for (const type of ['dragenter', 'dragover']) {
+  els.dropzone.addEventListener(type, (event) => {
+    event.preventDefault();
+    els.dropzone.classList.add('is-over');
+  });
+}
+for (const type of ['dragleave', 'drop']) {
+  els.dropzone.addEventListener(type, (event) => {
+    event.preventDefault();
+    els.dropzone.classList.remove('is-over');
+  });
+}
+els.dropzone.addEventListener('drop', (event) => handleFiles(event.dataTransfer.files));
+
+// --- Export ----------------------------------------------------------------
+
+async function exportAsset(assetId) {
+  const asset = getAsset(assetId);
+  if (!asset) return;
+
+  const ops = operationsFor(asset.id);
+  if (ops.length === 0) return;
+
+  const { bytes } = await pdfCall('apply', {
+    bytes: asset.bytes.slice(0),
+    operations: ops.map((op) => ({ type: op.type, params: op.params })),
+  });
+
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = asset.name.replace(/\.pdf$/i, '') + '-edited.pdf';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+els.exportBtn.addEventListener('click', () => {
+  const first = getState().assets[0];
+  if (first) exportAsset(first.id);
+});
+
+// Tools ask the UI to export rather than downloading behind the user's back.
+window.addEventListener('keepitoffline:export', (event) => exportAsset(event.detail.assetId));
+
+// --- Rendering -------------------------------------------------------------
+
+function renderAssets(state) {
+  els.assetList.replaceChildren();
+  for (const asset of state.assets) {
+    const li = document.createElement('li');
+    li.className = 'asset';
+
+    const info = document.createElement('div');
+    info.className = 'asset-info';
+    const name = document.createElement('span');
+    name.className = 'asset-name';
+    name.textContent = asset.name;
+    const detail = document.createElement('span');
+    detail.className = 'asset-detail';
+    detail.textContent =
+      asset.kind === 'pdf'
+        ? `PDF · ${asset.meta.pageCount} pages · ${asset.id}`
+        : `Image · ${asset.meta.width}×${asset.meta.height} · ${asset.id}`;
+    info.append(name, detail);
+
+    const remove = document.createElement('button');
+    remove.className = 'ghost';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => removeAsset(asset.id));
+
+    li.append(info, remove);
+    els.assetList.append(li);
+  }
+}
+
+function renderOperations(state) {
+  els.opList.replaceChildren();
+
+  if (state.operations.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'No operations queued.';
+    els.opList.append(li);
+    els.exportBtn.disabled = true;
+    return;
+  }
+
+  for (const op of state.operations) {
+    const li = document.createElement('li');
+    li.className = 'op' + (op.enabled ? '' : ' is-disabled');
+
+    const toggle = document.createElement('input');
+    toggle.type = 'checkbox';
+    toggle.checked = op.enabled;
+    toggle.addEventListener('change', () => setOperationEnabled(op.id, toggle.checked));
+
+    const label = document.createElement('span');
+    label.className = 'op-summary';
+    label.textContent = op.summary;
+
+    const badge = document.createElement('span');
+    badge.className = `badge badge-${op.source}`;
+    badge.textContent = op.source === 'agent' ? 'agent' : 'you';
+
+    const drop = document.createElement('button');
+    drop.className = 'ghost';
+    drop.textContent = '×';
+    drop.title = 'Discard this operation';
+    drop.addEventListener('click', () => removeOperation(op.id));
+
+    li.append(toggle, label, badge, drop);
+    els.opList.append(li);
+  }
+
+  els.exportBtn.disabled = state.operations.every((op) => !op.enabled);
+}
+
+function renderTools(names) {
+  els.toolList.replaceChildren();
+  for (const name of names) {
+    const li = document.createElement('li');
+    li.className = 'tool';
+    li.textContent = name;
+    els.toolList.append(li);
+  }
+}
+
+subscribe((state) => {
+  renderAssets(state);
+  renderOperations(state);
+});
+
+// --- Agent wiring ----------------------------------------------------------
+
+if (isSupported) {
+  els.agentStatus.hidden = false;
+  onRegistryChange((names) => {
+    renderTools(names);
+    els.agentStatusText.textContent = `Agent ready · ${names.length} tools`;
+  });
+  start();
+} else {
+  // No WebMCP here. The app is complete without it, so this is a note, not an error.
+  els.toolsHint.textContent =
+    'This browser does not expose WebMCP, so no tools are registered. Every feature still works by hand.';
+}
+
+renderAssets(getState());
+renderOperations(getState());

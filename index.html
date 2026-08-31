@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Keep It Offline — a file workbench that never uploads</title>
+    <meta
+      name="description"
+      content="Edit PDFs and images in your browser. Files never leave the tab. An AI agent can operate the tools without ever seeing your files."
+    />
+    <link rel="stylesheet" href="./src/ui/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="dot" aria-hidden="true"></span>
+        <h1>Keep It Offline</h1>
+      </div>
+      <div class="promise" title="This counter is real: the app makes no upload requests.">
+        <span class="promise-label">Bytes uploaded</span>
+        <span class="promise-value" id="bytes-uploaded">0</span>
+      </div>
+      <div class="agent-status" id="agent-status" hidden>
+        <span class="agent-dot" aria-hidden="true"></span>
+        <span id="agent-status-text">Agent ready</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="bench" aria-labelledby="bench-heading">
+        <h2 id="bench-heading">Your files</h2>
+
+        <div class="dropzone" id="dropzone" tabindex="0" role="button"
+             aria-label="Add files. Nothing is uploaded.">
+          <p class="dropzone-main">Drop PDFs or images here</p>
+          <p class="dropzone-sub">They stay on this device. Nothing is uploaded.</p>
+          <input type="file" id="file-input" multiple accept="application/pdf,image/*" hidden />
+        </div>
+
+        <ul class="asset-list" id="asset-list"></ul>
+      </section>
+
+      <aside class="side">
+        <section class="stack" aria-labelledby="stack-heading">
+          <h2 id="stack-heading">Operation stack</h2>
+          <p class="hint">
+            Nothing is destructive until you export. Uncheck any step to undo it, whether you
+            or the agent added it.
+          </p>
+          <ul class="op-list" id="op-list">
+            <li class="empty">No operations queued.</li>
+          </ul>
+          <button class="primary" id="export-btn" disabled>Apply and download</button>
+        </section>
+
+        <section class="tools-panel" aria-labelledby="tools-heading">
+          <h2 id="tools-heading">Tools exposed to the agent</h2>
+          <p class="hint" id="tools-hint">
+            Tools are registered based on what is on the bench, so the agent only ever sees
+            what makes sense right now.
+          </p>
+          <ul class="tool-list" id="tool-list"></ul>
+        </section>
+      </aside>
+    </main>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
