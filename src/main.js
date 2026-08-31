@@ -55,9 +55,6 @@ audioPanel.init({
   speed: document.getElementById('audio-speed'),
   speedValue: document.getElementById('audio-speed-value'),
   applySpeed: document.getElementById('apply-speed'),
-  trimStart: document.getElementById('audio-trim-start'),
-  trimEnd: document.getElementById('audio-trim-end'),
-  applyTrim: document.getElementById('apply-audio-trim'),
 });
 
 videoPanel.init({
@@ -67,9 +64,6 @@ videoPanel.init({
   rotateLeft: document.getElementById('video-rotate-left'),
   rotateRight: document.getElementById('video-rotate-right'),
   orientation: document.getElementById('video-orientation'),
-  trimStart: document.getElementById('trim-start'),
-  trimEnd: document.getElementById('trim-end'),
-  applyTrim: document.getElementById('apply-trim'),
 });
 
 imagePanel.init({
@@ -85,6 +79,17 @@ imagePanel.init({
   rotateLeft: document.getElementById('image-rotate-left'),
   rotateRight: document.getElementById('image-rotate-right'),
   orientation: document.getElementById('image-orientation'),
+  brightness: document.getElementById('adj-brightness'),
+  contrast: document.getElementById('adj-contrast'),
+  saturation: document.getElementById('adj-saturation'),
+  vibrance: document.getElementById('adj-vibrance'),
+  applyAdjust: document.getElementById('apply-adjust'),
+  resetAdjust: document.getElementById('reset-adjust'),
+  vignette: document.getElementById('adj-vignette'),
+  applyVignette: document.getElementById('apply-vignette'),
+  watermarkText: document.getElementById('watermark-text'),
+  watermarkPosition: document.getElementById('watermark-position'),
+  applyWatermark: document.getElementById('apply-watermark'),
 });
 
 // --- Manual editing --------------------------------------------------------
@@ -360,6 +365,23 @@ window.addEventListener('keepitoffline:export', (event) => exportAsset(event.det
 
 // --- Rendering -------------------------------------------------------------
 
+/** One line describing a file, in the terms that matter for its kind. */
+function describeAsset(asset) {
+  const { meta } = asset;
+  switch (asset.kind) {
+    case 'pdf':
+      return `PDF · ${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'} · ${asset.id}`;
+    case 'image':
+      return `Image · ${meta.width}×${meta.height} · ${asset.id}`;
+    case 'video':
+      return `Video · ${meta.width}×${meta.height} · ${meta.duration.toFixed(1)}s · ${asset.id}`;
+    case 'audio':
+      return `Audio · ${meta.duration.toFixed(1)}s · ${meta.channels === 1 ? 'mono' : 'stereo'} · ${asset.id}`;
+    default:
+      return asset.id;
+  }
+}
+
 function renderAssets(state) {
   els.assetList.replaceChildren();
 
@@ -391,10 +413,7 @@ function renderAssets(state) {
     name.textContent = asset.name;
     const detail = document.createElement('span');
     detail.className = 'asset-detail';
-    detail.textContent =
-      asset.kind === 'pdf'
-        ? `PDF · ${asset.meta.pageCount} pages · ${asset.id}`
-        : `Image · ${asset.meta.width}×${asset.meta.height} · ${asset.id}`;
+    detail.textContent = describeAsset(asset);
     info.append(name, detail);
 
     const remove = document.createElement('button');

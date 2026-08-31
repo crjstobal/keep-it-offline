@@ -122,7 +122,51 @@
             </label>
           </div>
           <div class="actionbar actionbar-secondary">
-            <span class="hint-inline">Looks preview live and stack: apply one, then pick another.</span>
+            <label class="field">
+              Brightness
+              <input type="range" class="adj" id="adj-brightness" min="-100" max="100" value="0" />
+            </label>
+            <label class="field">
+              Contrast
+              <input type="range" class="adj" id="adj-contrast" min="-100" max="100" value="0" />
+            </label>
+            <label class="field">
+              Saturation
+              <input type="range" class="adj" id="adj-saturation" min="-100" max="100" value="0" />
+            </label>
+            <label class="field">
+              Vibrance
+              <input type="range" class="adj" id="adj-vibrance" min="-100" max="100" value="0" />
+            </label>
+            <button class="ghost" id="apply-adjust" disabled>Apply</button>
+            <button class="ghost" id="reset-adjust">Reset</button>
+          </div>
+          <div class="actionbar actionbar-secondary">
+            <label class="field">
+              Vignette
+              <input type="range" id="adj-vignette" min="0" max="100" value="0" />
+            </label>
+            <button class="ghost" id="apply-vignette" disabled>Apply</button>
+            <span class="sep" aria-hidden="true"></span>
+            <label class="field">
+              Watermark
+              <input type="text" id="watermark-text" placeholder="Your name" />
+            </label>
+            <label class="field">
+              <select id="watermark-position">
+                <option value="bottom-right">Bottom right</option>
+                <option value="bottom-left">Bottom left</option>
+                <option value="bottom-center">Bottom centre</option>
+                <option value="center">Centre</option>
+                <option value="top-right">Top right</option>
+                <option value="top-left">Top left</option>
+                <option value="top-center">Top centre</option>
+              </select>
+            </label>
+            <button class="ghost" id="apply-watermark">Add</button>
+          </div>
+          <div class="actionbar actionbar-secondary">
+            <span class="hint-inline">Everything here previews live. Apply adds one step to the stack.</span>
             <span class="sep" aria-hidden="true"></span>
             <label class="field zoom-field">
               <span class="zoom-icon" aria-hidden="true">◻</span>
@@ -154,20 +198,10 @@
             </label>
           </div>
           <div class="actionbar actionbar-secondary">
-            <span class="hint-inline">Trim</span>
-            <label class="field">
-              From
-              <input type="number" id="trim-start" min="0" step="0.1" placeholder="0" />
-            </label>
-            <label class="field">
-              To
-              <input type="number" id="trim-end" min="0" step="0.1" placeholder="end" />
-            </label>
-            <button class="ghost" id="apply-trim">Trim</button>
-            <span class="sep" aria-hidden="true"></span>
-            <span class="hint-inline" id="video-note">Every frame is processed in this tab.</span>
+            <span class="hint-inline">Play a clip and drag the handles to choose a cut. Scroll the
+              timeline to zoom. Every frame is processed in this tab.</span>
           </div>
-          <div class="image-grid" id="video-grid"></div>
+          <div class="video-grid" id="video-grid"></div>
         </div>
 
         <div class="editor" id="audio-editor" hidden>
@@ -180,15 +214,8 @@
             </label>
             <button class="ghost" id="apply-speed">Apply speed</button>
             <span class="sep" aria-hidden="true"></span>
-            <label class="field">
-              From
-              <input type="number" id="audio-trim-start" min="0" step="0.1" placeholder="0" />
-            </label>
-            <label class="field">
-              To
-              <input type="number" id="audio-trim-end" min="0" step="0.1" placeholder="end" />
-            </label>
-            <button class="ghost" id="apply-audio-trim">Trim</button>
+            <span class="hint-inline">Play a track and drag the handles to choose a cut.
+              Scroll the waveform to zoom in.</span>
           </div>
           <div class="audio-list" id="audio-list"></div>
         </div>

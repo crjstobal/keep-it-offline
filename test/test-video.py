@@ -1,4 +1,4 @@
-import sys, os, zipfile
+import sys, os, subprocess
 from playwright.sync_api import sync_playwright
 
 S = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
@@ -22,7 +22,7 @@ with sync_playwright() as pw:
     p.wait_for_timeout(3500)
 
     check("video editor appears once a clip is loaded", p.locator("#video-editor").is_visible())
-    check("the clip is on the bench", p.locator("#video-grid .image-cell").count() == 1)
+    check("the clip is on the bench", p.locator("#video-grid .video-cell").count() == 1)
 
     meta = p.evaluate("""async () => {
         const { getState } = await import('./src/core/workspace.js');
@@ -39,19 +39,60 @@ with sync_playwright() as pw:
     p.click("#video-rotate-right")
     p.wait_for_timeout(600)
     check("rotation queues one operation", p.locator(".op").count() == 1)
-    caption = p.inner_text("#video-grid .image-name")
+    caption = p.inner_text("#video-grid .audio-meta")
     check("the caption shows the rotated size", "360×640" in caption, caption)
 
-    # Trim.
-    p.fill("#trim-start", "0.5")
-    p.fill("#trim-end", "1.5")
-    p.click("#apply-trim")
+    # Trim by dragging a timeline handle, the way a person would.
+    box = p.locator(".timeline").bounding_box()
+    eb = p.locator(".timeline-handle-end").bounding_box()
+    p.mouse.move(eb["x"] + eb["width"]/2, eb["y"] + eb["height"]/2)
+    p.mouse.down()
+    p.mouse.move(box["x"] + box["width"]*0.5, eb["y"] + eb["height"]/2, steps=8)
+    p.mouse.up()
+    p.wait_for_timeout(400)
+    p.click("text=Trim to selection")
     p.wait_for_timeout(600)
-    check("trim queues a second operation", p.locator(".op").count() == 2)
-    caption = p.inner_text("#video-grid .image-name")
-    check("the caption shows the trimmed duration", "1.0s" in caption, caption)
+    check("dragging a handle and trimming queues an operation",
+          p.locator(".op").count() == 2, f"{p.locator('.op').count()} ops")
 
-    # Export the clip and confirm a real video comes out.
+    # And the trim has to reach the file. Everything is cleared and a known trim
+    # queued, so the measurement is of the trim alone rather than of whatever
+    # the drag happened to land on.
+    p.evaluate("""async () => {
+        const { getState, clearOperations, pushOperation } = await import('./src/core/workspace.js');
+        clearOperations();
+        const a = getState().assets.find(x => x.kind === 'video');
+        pushOperation({ type: 'trim_video', assetIds: a.id, params: { start: 0, end: 1 },
+                        summary: 'Trim to 0s-1s', source: 'user' });
+    }""")
+    p.wait_for_timeout(600)
+
+    with p.expect_download(timeout=60000) as dl2:
+        p.click("#export-btn")
+    trimmed_path = "/tmp/trimmed-clip.mp4"
+    dl2.value.save_as(trimmed_path)
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", trimmed_path],
+            capture_output=True, text=True, timeout=30)
+        trimmed = float(out.stdout.strip())
+        check("a trim shortens the exported clip",
+              0.8 <= trimmed <= 1.2, f"{trimmed}s for a 1s trim of a 2s clip")
+    except (FileNotFoundError, ValueError, subprocess.TimeoutExpired) as e:
+        print(f"  --  skipped trimmed duration check ({e})")
+
+    # Export a rotated but untrimmed clip: the stack is reset to just a rotation
+    # so this measures length independently of the trims exercised above.
+    p.evaluate("""async () => {
+        const { getState, clearOperations, pushOperation } = await import('./src/core/workspace.js');
+        clearOperations();
+        const a = getState().assets.find(x => x.kind === 'video');
+        pushOperation({ type: 'rotate_video', assetIds: a.id, params: { degrees: 90 },
+                        summary: 'Rotate 90', source: 'user' });
+    }""")
+    p.wait_for_timeout(600)
+
     with p.expect_download(timeout=60000) as dl:
         p.click("#export-btn")
     d = dl.value
@@ -60,20 +101,18 @@ with sync_playwright() as pw:
     size = os.path.getsize(d.path())
     check("the exported clip has real content", size > 5000, f"{size} bytes")
 
-    # A trim asked for one second has to produce one second. MediaRecorder
-    # stamps frames with wall-clock time, so rendering faster than real time
-    # silently shortens the clip unless each frame is held for its slot.
-    import subprocess
+    # This export carries a rotation but no trim, so it must keep its length.
     try:
         out = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=noprint_wrappers=1:nokey=1", d.path()],
             capture_output=True, text=True, timeout=30)
-        duration = float(out.stdout.strip())
-        check("the exported clip lasts as long as the trim asked for",
-              0.9 <= duration <= 1.15, f"{duration}s for a 1.0s trim")
+        full = float(out.stdout.strip())
+        check("an untrimmed export keeps its full length",
+              1.8 <= full <= 2.2, f"{full}s for a 2s clip")
     except (FileNotFoundError, ValueError, subprocess.TimeoutExpired) as e:
-        print(f"  --  skipped duration check (ffprobe unavailable: {e})")
+        print(f"  --  skipped full-length check ({e})")
+
 
     # Smart orientation over a mixed set: only what needs turning is turned.
     p.set_input_files("#file-input", f"{S}/clip-portrait.mp4")

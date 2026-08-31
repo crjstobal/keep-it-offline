@@ -16,8 +16,22 @@ const previewUrls = new Map();
 /** Full-resolution renders for the enlarged viewer, keyed by asset id. */
 const fullUrls = new Map();
 
-/** What the controls currently propose, applied to previews but not committed. */
-let draft = { look: '', intensity: 1 };
+/**
+ * What the controls currently propose, previewed but not committed.
+ *
+ * Every control feeds this one object, and previews render the stack plus the
+ * draft, so a look, a brightness nudge and a vignette all show together before
+ * any of them is fixed in place.
+ */
+let draft = {
+  look: '',
+  intensity: 1,
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  vibrance: 0,
+  vignette: 0,
+};
 /** Guards against overlapping preview renders when the slider is dragged. */
 let previewToken = 0;
 
@@ -69,7 +83,7 @@ export function init(elements) {
     // The look is committed, so the draft goes back to neutral: leaving it set
     // would show it twice, once queued and once as a pending preview. Looks
     // still stack, so choosing another one adds a second step.
-    resetDraft();
+    resetLookDraft();
   });
 
   els.applyResize.addEventListener('click', () => {
@@ -128,16 +142,102 @@ export function init(elements) {
     els.orientation.value = '';
   });
 
+  // Tonal controls: each one previews as it moves, and Apply fixes whatever is
+  // on screen as a single operation rather than one per slider.
+  for (const key of ['brightness', 'contrast', 'saturation', 'vibrance']) {
+    els[key].addEventListener('input', () => {
+      draft[key] = Number(els[key].value) / 100;
+      els.applyAdjust.disabled = !hasAdjustments();
+      schedulePreview();
+    });
+  }
+
+  els.applyAdjust.addEventListener('click', () => {
+    if (!hasAdjustments()) return;
+    const described = ['brightness', 'contrast', 'saturation', 'vibrance']
+      .filter((key) => draft[key] !== 0)
+      .map((key) => `${key} ${draft[key] > 0 ? '+' : ''}${Math.round(draft[key] * 100)}`)
+      .join(', ');
+
+    queueForAll(
+      'adjust_image',
+      {
+        brightness: draft.brightness,
+        contrast: draft.contrast,
+        saturation: draft.saturation,
+        vibrance: draft.vibrance,
+      },
+      `Adjust ${scopeOfImages()}: ${described}`,
+    );
+    resetAdjustDraft();
+  });
+
+  els.resetAdjust.addEventListener('click', () => {
+    resetAdjustDraft();
+    resetVignetteDraft();
+    resetLookDraft();
+    schedulePreview();
+  });
+
+  els.vignette.addEventListener('input', () => {
+    draft.vignette = Number(els.vignette.value) / 100;
+    els.applyVignette.disabled = draft.vignette === 0;
+    schedulePreview();
+  });
+
+  els.applyVignette.addEventListener('click', () => {
+    if (draft.vignette === 0) return;
+    queueForAll(
+      'apply_vignette',
+      { amount: draft.vignette },
+      `Vignette ${scopeOfImages()} at ${Math.round(draft.vignette * 100)}%`,
+    );
+    resetVignetteDraft();
+  });
+
+  els.applyWatermark.addEventListener('click', () => {
+    const text = els.watermarkText.value.trim();
+    if (!text) return;
+    const position = els.watermarkPosition.value;
+    queueForAll(
+      'add_watermark',
+      { text, position, opacity: 0.6, size: 0.05 },
+      `Watermark ${scopeOfImages()} with "${text}" (${position})`,
+    );
+    els.watermarkText.value = '';
+  });
+
   els.applyLook.disabled = true;
 }
 
-function resetDraft() {
-  draft = { look: '', intensity: 1 };
+function resetLookDraft() {
+  draft.look = '';
+  draft.intensity = 1;
   els.lookSelect.value = '';
   els.lookStrength.value = '100';
   els.lookStrengthValue.textContent = '100%';
   els.applyLook.disabled = true;
 }
+
+function resetAdjustDraft() {
+  draft.brightness = 0;
+  draft.contrast = 0;
+  draft.saturation = 0;
+  draft.vibrance = 0;
+  for (const key of ['brightness', 'contrast', 'saturation', 'vibrance']) {
+    els[key].value = '0';
+  }
+  els.applyAdjust.disabled = true;
+}
+
+function resetVignetteDraft() {
+  draft.vignette = 0;
+  els.vignette.value = '0';
+  els.applyVignette.disabled = true;
+}
+
+const hasAdjustments = () =>
+  draft.brightness !== 0 || draft.contrast !== 0 || draft.saturation !== 0 || draft.vibrance !== 0;
 
 /**
  * Dragging the strength slider fires continuously, and each preview is a full
@@ -157,12 +257,29 @@ function schedulePreview() {
 
 /** The operations to preview: what is committed, plus what the controls propose. */
 function previewOperations(assetId) {
-  const committed = operationsFor(assetId).map((op) => ({ type: op.type, params: op.params }));
-  if (!draft.look) return committed;
-  return [
-    ...committed,
-    { type: 'apply_lut', params: { lut_name: draft.look, intensity: draft.intensity } },
-  ];
+  const ops = operationsFor(assetId).map((op) => ({ type: op.type, params: op.params }));
+
+  if (draft.look) {
+    ops.push({
+      type: 'apply_lut',
+      params: { lut_name: draft.look, intensity: draft.intensity },
+    });
+  }
+  if (hasAdjustments()) {
+    ops.push({
+      type: 'adjust_image',
+      params: {
+        brightness: draft.brightness,
+        contrast: draft.contrast,
+        saturation: draft.saturation,
+        vibrance: draft.vibrance,
+      },
+    });
+  }
+  if (draft.vignette > 0) {
+    ops.push({ type: 'apply_vignette', params: { amount: draft.vignette } });
+  }
+  return ops;
 }
 
 export function setThumbSize(px) {
