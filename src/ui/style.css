@@ -271,6 +271,11 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   max-height: 70.7cqw;
 }
 
+/* The whole card is the selection target, so it advertises that with a pointer.
+   The checkbox stays as a state indicator and a keyboard affordance. */
+.page-cell { cursor: pointer; user-select: none; }
+.page-cell:hover { border-color: var(--muted); }
+
 .page-check {
   position: absolute;
   top: 10px;
@@ -280,5 +285,93 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   height: 16px;
   cursor: pointer;
 }
+
+.page-zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgb(23 26 33 / 0.85);
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.page-cell:hover .page-zoom,
+.page-zoom:focus-visible { opacity: 1; }
+.page-zoom:hover { color: var(--text); border-color: var(--muted); }
+
+/* --- Enlarged viewer ----------------------------------------------------- */
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgb(8 10 14 / 0.88);
+  backdrop-filter: blur(3px);
+}
+.viewer[hidden] { display: none; }
+
+.viewer-image {
+  max-width: min(88vw, 900px);
+  max-height: 86vh;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+  transition: rotate 0.2s;
+}
+/* Turned a quarter, the page's height spans the viewport horizontally. */
+.viewer-image.is-quarter-turned {
+  max-width: 86vh;
+  max-height: min(88vw, 900px);
+}
+
+.viewer-caption {
+  position: fixed;
+  bottom: 24px;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-close {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  width: 36px;
+  height: 36px;
+  font-size: 22px;
+  line-height: 1;
+  background: transparent;
+  color: var(--muted);
+  border-color: transparent;
+}
+.viewer-close:hover { color: var(--text); border-color: var(--line); }
+
+.viewer-nav {
+  position: fixed;
+  top: 50%;
+  translate: 0 -50%;
+  width: 44px;
+  height: 64px;
+  font-size: 30px;
+  line-height: 1;
+  background: transparent;
+  color: var(--muted);
+  border-color: transparent;
+}
+.viewer-nav:hover { color: var(--text); border-color: var(--line); }
+.viewer-prev { left: 16px; }
+.viewer-next { right: 16px; }
 
 .page-number { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }

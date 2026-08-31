@@ -6,7 +6,7 @@
 
 import { operationsFor, pushOperation } from '../core/workspace.js';
 import { previewPages } from '../core/preview.js';
-import { renderThumbnails } from '../core/thumbnails.js';
+import { renderFullPage, renderThumbnails } from '../core/thumbnails.js';
 
 /** Pages the user has ticked, as source indices. */
 const selection = new Set();
@@ -14,6 +14,8 @@ const selection = new Set();
 let currentAsset = null;
 let thumbs = [];
 let onChange = () => {};
+/** Anchor for shift-click ranges. */
+let lastClickedIndex = null;
 
 export function init({ container, onSelectionChange }) {
   currentAsset = null;
@@ -79,13 +81,55 @@ function fillCell(cell, index, dataUrl) {
   check.type = 'checkbox';
   check.className = 'page-check';
   check.setAttribute('aria-label', `Select page ${index + 1}`);
-  check.addEventListener('change', () => {
-    check.checked ? selection.add(index) : selection.delete(index);
-    cell.classList.toggle('is-selected', check.checked);
-    onChange(selection.size);
+  check.addEventListener('click', (event) => {
+    // The cell handles selection; let it see the click once, not twice.
+    event.stopPropagation();
+    setSelected(cell, index, check.checked);
+    lastClickedIndex = index;
   });
 
-  cell.append(check, frame, label);
+  // Zooming lives behind its own button rather than on hover: the pointer
+  // crosses dozens of pages on the way anywhere, and a preview that opens by
+  // itself every time would be noise.
+  const zoom = document.createElement('button');
+  zoom.className = 'page-zoom';
+  zoom.title = `Enlarge page ${index + 1}`;
+  zoom.setAttribute('aria-label', `Enlarge page ${index + 1}`);
+  zoom.textContent = '⤢';
+  zoom.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openViewer(index);
+  });
+
+  // The whole card is the hit target, which is far easier to hit than a 16px box.
+  cell.addEventListener('click', (event) => {
+    if (event.shiftKey && lastClickedIndex !== null) {
+      selectRange(cell.parentElement, lastClickedIndex, index);
+      return;
+    }
+    setSelected(cell, index, !selection.has(index));
+    lastClickedIndex = index;
+  });
+
+  cell.append(check, zoom, frame, label);
+}
+
+/** Single source of truth for "this page is selected", used by every path. */
+function setSelected(cell, index, selected) {
+  selected ? selection.add(index) : selection.delete(index);
+  cell.classList.toggle('is-selected', selected);
+  const check = cell.querySelector('.page-check');
+  if (check) check.checked = selected;
+  onChange(selection.size);
+}
+
+/** Shift-click: select everything between the last click and this one. */
+function selectRange(grid, from, to) {
+  const [start, end] = from <= to ? [from, to] : [to, from];
+  for (let i = start; i <= end; i++) {
+    const cell = grid.children[i];
+    if (cell) setSelected(cell, i, true);
+  }
 }
 
 /** Grey out pages the enabled operations would remove, and apply rotations. */
@@ -163,7 +207,9 @@ export function rotateSelected(container, deg) {
     summary: `Rotate ${pages.length} page${pages.length === 1 ? '' : 's'} by ${deg}°`,
     source: 'user',
   });
-  clearSelection(container);
+  // The selection survives a rotation on purpose: turning the same pages twice
+  // to reach 180°, or rotating and then removing them, are both common.
+  // Removal is the exception, since those pages are gone from the document.
 }
 
 /**
@@ -190,4 +236,122 @@ export function selectPages(container, mode) {
 
 export function getCurrentAsset() {
   return currentAsset;
+}
+
+// --- Enlarged viewer -------------------------------------------------------
+
+let viewer = null;
+let viewerIndex = 0;
+
+function buildViewer() {
+  const overlay = document.createElement('div');
+  overlay.className = 'viewer';
+  overlay.hidden = true;
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Enlarged page');
+
+  const img = document.createElement('img');
+  img.className = 'viewer-image';
+
+  const caption = document.createElement('div');
+  caption.className = 'viewer-caption';
+
+  const close = document.createElement('button');
+  close.className = 'viewer-close';
+  close.textContent = '×';
+  close.setAttribute('aria-label', 'Close');
+  close.addEventListener('click', closeViewer);
+
+  const prev = document.createElement('button');
+  prev.className = 'viewer-nav viewer-prev';
+  prev.textContent = '‹';
+  prev.setAttribute('aria-label', 'Previous page');
+  prev.addEventListener('click', (event) => {
+    event.stopPropagation();
+    step(-1);
+  });
+
+  const next = document.createElement('button');
+  next.className = 'viewer-nav viewer-next';
+  next.textContent = '›';
+  next.setAttribute('aria-label', 'Next page');
+  next.addEventListener('click', (event) => {
+    event.stopPropagation();
+    step(1);
+  });
+
+  // Clicking the backdrop closes, but clicking the page itself does not.
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) closeViewer();
+  });
+  img.addEventListener('click', (event) => event.stopPropagation());
+
+  overlay.append(close, prev, img, next, caption);
+  document.body.append(overlay);
+  return { overlay, img, caption };
+}
+
+function step(delta) {
+  if (!currentAsset) return;
+  const total = currentAsset.meta.pageCount;
+  viewerIndex = (viewerIndex + delta + total) % total;
+  showInViewer(viewerIndex);
+}
+
+async function showInViewer(index) {
+  if (!viewer || !currentAsset) return;
+  const asset = currentAsset;
+
+  // Show the thumbnail immediately so the viewer is never blank, then swap in
+  // the full-size render when it is ready.
+  viewer.img.src = thumbs[index] ?? '';
+  viewer.img.alt = `Page ${index + 1}`;
+  viewer.caption.textContent = `Page ${index + 1} of ${asset.meta.pageCount}`;
+
+  const rotation = rotationFor(index);
+  viewer.img.style.rotate = `${rotation}deg`;
+  viewer.img.classList.toggle('is-quarter-turned', rotation === 90 || rotation === 270);
+
+  try {
+    const full = await renderFullPage(asset.id, asset.bytes, index);
+    // The user may have moved on while that rendered.
+    if (currentAsset?.id === asset.id && viewerIndex === index) viewer.img.src = full;
+  } catch (error) {
+    console.error('[keepitoffline] could not render full page', error);
+  }
+}
+
+/** Rotation the stack currently applies to a source page, for the viewer. */
+function rotationFor(sourceIndex) {
+  if (!currentAsset) return 0;
+  const ops = operationsFor(currentAsset.id).map((op) => ({ type: op.type, params: op.params }));
+  const page = previewPages(currentAsset.meta.pageCount, ops).find(
+    (p) => p.sourceIndex === sourceIndex,
+  );
+  return page?.rotation ?? 0;
+}
+
+export function openViewer(index) {
+  if (!viewer) viewer = buildViewer();
+  viewerIndex = index;
+  showInViewer(index);
+  viewer.overlay.hidden = false;
+  document.addEventListener('keydown', onViewerKey);
+}
+
+export function closeViewer() {
+  if (!viewer) return;
+  viewer.overlay.hidden = true;
+  document.removeEventListener('keydown', onViewerKey);
+}
+
+function onViewerKey(event) {
+  if (event.key === 'Escape') closeViewer();
+  else if (event.key === 'ArrowRight') step(1);
+  else if (event.key === 'ArrowLeft') step(-1);
+}
+
+export function isViewerOpen() {
+  return Boolean(viewer && !viewer.overlay.hidden);
 }
