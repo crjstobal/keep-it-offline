@@ -59,6 +59,11 @@ export function removeAsset(id) {
   if (state.assets.length !== before) notify();
 }
 
+/** Re-render after mutating an asset's metadata in place (a poster frame, say). */
+export function touch() {
+  notify();
+}
+
 export function getAsset(id) {
   return state.assets.find((a) => a.id === id);
 }

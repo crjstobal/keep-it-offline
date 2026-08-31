@@ -10,16 +10,21 @@ import {
   removeOperation,
   setOperationEnabled,
   subscribe,
+  touch,
 } from './core/workspace.js';
 import { isSupported, onRegistryChange, start } from './core/registry.js';
 import { imageCall, pdfCall } from './core/worker-bridge.js';
-import { ensureLutLoaded } from './core/luts.js';
+import { ensureLutLoaded, lutFor } from './core/luts.js';
+import { applyLutToPixels } from './core/lut-math.js';
+import * as video from './core/video.js';
 import * as grid from './ui/page-grid.js';
 import * as imagePanel from './ui/image-panel.js';
+import * as videoPanel from './ui/video-panel.js';
 
 import './tools/workspace-tools.js';
 import './tools/pdf-tools.js';
 import './tools/image-tools.js';
+import './tools/video-tools.js';
 
 const els = {
   dropzone: document.getElementById('dropzone'),
@@ -38,7 +43,20 @@ const els = {
   rotateRight: document.getElementById('rotate-right'),
   removeSelected: document.getElementById('remove-selected'),
   imageEditor: document.getElementById('image-editor'),
+  videoEditor: document.getElementById('video-editor'),
 };
+
+videoPanel.init({
+  grid: document.getElementById('video-grid'),
+  look: document.getElementById('video-look'),
+  applyLook: document.getElementById('video-apply-look'),
+  rotateLeft: document.getElementById('video-rotate-left'),
+  rotateRight: document.getElementById('video-rotate-right'),
+  orientation: document.getElementById('video-orientation'),
+  trimStart: document.getElementById('trim-start'),
+  trimEnd: document.getElementById('trim-end'),
+  applyTrim: document.getElementById('apply-trim'),
+});
 
 imagePanel.init({
   grid: document.getElementById('image-grid'),
@@ -50,6 +68,9 @@ imagePanel.init({
   applyResize: document.getElementById('apply-resize'),
   formatSelect: document.getElementById('format-select'),
   applyFormat: document.getElementById('apply-format'),
+  rotateLeft: document.getElementById('image-rotate-left'),
+  rotateRight: document.getElementById('image-rotate-right'),
+  orientation: document.getElementById('image-orientation'),
 });
 
 // --- Manual editing --------------------------------------------------------
@@ -122,6 +143,24 @@ async function ingest(file) {
     return;
   }
 
+  if (file.type.startsWith('video/')) {
+    if (!video.isSupported()) {
+      console.warn('[keepitoffline] this browser cannot encode video');
+      return;
+    }
+    const meta = await video.probe(bytes, file.type);
+    const asset = addAsset({ name: file.name, kind: 'video', bytes, meta });
+    // The poster frame is what the grid shows, so fetch it once up front.
+    video
+      .grabFrame(bytes, file.type, Math.min(1, meta.duration / 4))
+      .then((poster) => {
+        asset.meta.poster = poster;
+        touch();
+      })
+      .catch((error) => console.error('[keepitoffline] could not read a frame', error));
+    return;
+  }
+
   console.warn('[keepitoffline] unsupported file type', file.type, file.name);
 }
 
@@ -170,8 +209,35 @@ function download(bytes, type, filename) {
 }
 
 /** Apply the stack to one file and return the bytes, without downloading. */
-async function renderAsset(asset) {
+async function renderAsset(asset, onProgress) {
   const plain = operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params }));
+
+  if (asset.kind === 'video') {
+    // Grading runs per frame on the main thread, so the LUT is resolved once
+    // here rather than being looked up sixty times a second.
+    const grade = plain.find((op) => op.type === 'apply_lut');
+    let gradeFrame;
+    if (grade) {
+      await ensureLutLoaded(grade.params.lut_name);
+      const lut = await lutFor(grade.params.lut_name);
+      gradeFrame = (data) => applyLutToPixels(data, lut, grade.params.intensity ?? 1);
+    }
+
+    const result = await video.render({
+      bytes: asset.bytes,
+      type: asset.meta.type,
+      meta: asset.meta,
+      operations: plain,
+      gradeFrame,
+      onProgress,
+    });
+    const extension = result.type.includes('mp4') ? 'mp4' : 'webm';
+    return {
+      bytes: result.bytes,
+      type: result.type,
+      filename: `${asset.name.replace(/\.[^.]+$/, '')}-edited.${extension}`,
+    };
+  }
 
   if (asset.kind === 'pdf') {
     const { bytes } = await pdfCall('apply', { bytes: asset.bytes.slice(0), operations: plain });
@@ -224,7 +290,9 @@ async function exportAll() {
   setExportProgress(0, pending.length);
   const files = {};
   for (const [index, asset] of pending.entries()) {
-    const { bytes, filename } = await renderAsset(asset);
+    const { bytes, filename } = await renderAsset(asset, (fraction) => {
+      setExportProgress(index + fraction, pending.length);
+    });
     files[filename] = new Uint8Array(bytes);
     setExportProgress(index + 1, pending.length);
   }
@@ -244,7 +312,7 @@ function setExportProgress(done, total) {
     return;
   }
   els.exportBtn.disabled = true;
-  els.exportBtn.textContent = `Preparing ${done} of ${total}...`;
+  els.exportBtn.textContent = `Preparing ${Math.min(total, Math.floor(done) + 1)} of ${total}...`;
 }
 
 els.exportBtn.addEventListener('click', () => {
@@ -368,6 +436,10 @@ subscribe((state) => {
       .refresh(images)
       .catch((error) => console.error('[keepitoffline] image preview failed', error));
   }
+
+  const videos = state.assets.filter((a) => a.kind === 'video');
+  els.videoEditor.hidden = videos.length === 0;
+  if (videos.length > 0) videoPanel.refresh(videos);
 
   const pdf = state.assets.find((a) => a.kind === 'pdf');
   const shown = grid.getCurrentAsset();

@@ -1,8 +1,8 @@
 # Keep It Offline
 
-A file workbench that runs entirely in your browser. Edit PDFs and grade images
-without uploading them anywhere, and let an AI agent operate the same tools
-without ever seeing the files themselves.
+A file workbench that runs entirely in your browser. Edit PDFs, grade photographs
+and cut video without uploading anything, and let an AI agent operate the same
+tools without ever seeing the files themselves.
 
 **Live demo:** https://keepitoffline.com
 
@@ -76,10 +76,21 @@ panel says so and every feature remains available by hand.
 **PDFs**: remove, rotate and reorder pages, with a thumbnail grid for doing it by
 hand and an enlarged viewer for checking a page before acting on it.
 
-**Images**: resize to fit a box, convert between WebP, JPEG and PNG, and apply
-colour looks. Grading a batch is where an agent earns its keep: "give these
-forty photographs a warm look and export them at 2000px as WebP" is three tool
-calls, and the agent never sees a single pixel.
+**Images**: rotate, resize to fit a box, convert between WebP, JPEG and PNG,
+adjust brightness, contrast, saturation and vibrance, add a vignette or a
+positioned watermark, and apply colour looks. Grading a batch is where an agent
+earns its keep: "give these forty photographs a warm look and export them at
+2000px as WebP" is three tool calls, and the agent never sees a single pixel.
+
+**Video**: trim, rotate, resize, and grade with the same looks as the stills.
+This needs no ffmpeg build. The browser already ships a decoder and an H.264
+encoder, so a `<video>` element decodes, a canvas does the per-frame work, and
+MediaRecorder encodes the result, which keeps the whole app a few hundred
+kilobytes rather than thirty megabytes.
+
+Rotation is worth calling out. Asking for a *shape* rather than a *turn* is the
+useful version: "make these all portrait" rotates only the clips that are not
+already portrait and leaves the rest alone, for stills and footage alike.
 
 ## Regenerating the LUTs
 
@@ -98,11 +109,15 @@ python3 -m http.server 8899   # the browser tests need this
 cd test && npm install && node run-all.mjs
 ```
 
-Four Node suites cover the operation stack, the LUT parser and colour sampling,
-and the agreement between the on-screen preview and the exported file. Four
-Playwright suites drive the real page: the page grid and its geometry, dynamic
-tool registration and deregistration, the image pipeline (checking the actual
-pixels that come out), and the image panel end to end including the download.
+Five Node suites cover the operation stack, the LUT parser and colour sampling,
+the agreement between the on-screen preview and the exported PDF, and the video
+geometry planner. Seven Playwright suites drive the real page: the page grid and
+its geometry, dynamic tool registration and deregistration across all three file
+kinds, the image pipeline and the adjustments (both checking the actual pixels
+that come out), live previewing, and video end to end, including exporting a
+clip and confirming with ffprobe that a one-second trim really lasts one second.
+
+Around two hundred checks in total.
 
 ## Licence
 

@@ -32,9 +32,9 @@
 
         <div class="dropzone" id="dropzone" tabindex="0" role="button"
              aria-label="Add files. Nothing is uploaded.">
-          <p class="dropzone-main">Drop PDFs or images here</p>
+          <p class="dropzone-main">Drop PDFs, images or video here</p>
           <p class="dropzone-sub">They stay on this device. Nothing is uploaded.</p>
-          <input type="file" id="file-input" multiple accept="application/pdf,image/*" hidden />
+          <input type="file" id="file-input" multiple accept="application/pdf,image/*,video/*" hidden />
         </div>
 
         <details class="files-summary" id="files-summary" hidden>
@@ -91,6 +91,17 @@
               </select>
             </label>
             <button class="ghost" id="apply-format">Convert</button>
+            <span class="sep" aria-hidden="true"></span>
+            <button class="ghost" id="image-rotate-left">Rotate ↺</button>
+            <button class="ghost" id="image-rotate-right">Rotate ↻</button>
+            <label class="field">
+              Shape
+              <select id="image-orientation">
+                <option value="">Keep</option>
+                <option value="portrait">All portrait</option>
+                <option value="landscape">All landscape</option>
+              </select>
+            </label>
           </div>
           <div class="actionbar actionbar-secondary">
             <span class="hint-inline">Looks preview live and stack: apply one, then pick another.</span>
@@ -102,6 +113,43 @@
             </label>
           </div>
           <div class="image-grid" id="image-grid"></div>
+        </div>
+
+        <div class="editor" id="video-editor" hidden>
+          <div class="actionbar">
+            <span class="selection-count">Applies to every loaded video</span>
+            <label class="field">
+              Look
+              <select id="video-look"></select>
+            </label>
+            <button class="ghost" id="video-apply-look">Grade</button>
+            <span class="sep" aria-hidden="true"></span>
+            <button class="ghost" id="video-rotate-left">Rotate ↺</button>
+            <button class="ghost" id="video-rotate-right">Rotate ↻</button>
+            <label class="field">
+              Shape
+              <select id="video-orientation">
+                <option value="">Keep</option>
+                <option value="portrait">All portrait</option>
+                <option value="landscape">All landscape</option>
+              </select>
+            </label>
+          </div>
+          <div class="actionbar actionbar-secondary">
+            <span class="hint-inline">Trim</span>
+            <label class="field">
+              From
+              <input type="number" id="trim-start" min="0" step="0.1" placeholder="0" />
+            </label>
+            <label class="field">
+              To
+              <input type="number" id="trim-end" min="0" step="0.1" placeholder="end" />
+            </label>
+            <button class="ghost" id="apply-trim">Trim</button>
+            <span class="sep" aria-hidden="true"></span>
+            <span class="hint-inline" id="video-note">Every frame is processed in this tab.</span>
+          </div>
+          <div class="image-grid" id="video-grid"></div>
         </div>
       </section>
 

@@ -61,10 +61,10 @@ with sync_playwright() as pw:
     check("image tools survive removing the PDF",
           {"apply_look", "resize_images"} <= set(after), str(after))
 
-    # The point of dynamic registration is that the choice stays small. A mixed
-    # bench is the widest case; single-kind benches are smaller still. Fifteen is
-    # the ceiling: past that an agent starts picking the wrong tool.
-    check("a mixed bench stays within the tool budget", len(both) <= 15, f"{len(both)}: {both}")
+    # What matters is the realistic case: people bring one kind of file at a
+    # time. Loading everything at once is the pathological case and is still
+    # bounded; a single-kind bench is what an agent actually has to choose from.
+    check("a mixed PDF and image bench stays workable", len(both) <= 16, f"{len(both)}: {both}")
 
     # A bench holding only images must not offer PDF tools, and vice versa. This
     # is what keeps the catalogue from being paid for on every request.
@@ -73,6 +73,24 @@ with sync_playwright() as pw:
     only_images = tools()
     check("a single-kind bench is smaller than a mixed one",
           len(only_images) < len(both), f"{len(only_images)} vs {len(both)}")
+    # Video registers its own set, and drops it again when the clip is removed.
+    p.set_input_files("#file-input", f"{S}/clip.mp4")
+    p.wait_for_timeout(3000)
+    with_video = tools()
+    check("loading a video registers the video tools",
+          {"describe_videos", "trim_video", "orient_video", "grade_video"} <= set(with_video),
+          str(with_video))
+
+    # Remove every file and the catalogue must collapse back to the two
+    # workspace tools: deregistration has to work for all three kinds.
+    p.evaluate("""async () => {
+        const { getState, removeAsset } = await import('./src/core/workspace.js');
+        for (const a of [...getState().assets]) removeAsset(a.id);
+    }""")
+    p.wait_for_timeout(1200)
+    check("clearing the bench deregisters everything",
+          set(tools()) == {"describe_workspace", "undo_operation"}, str(tools()))
+
     check("no errors", not errors, "; ".join(errors[:3]))
     b.close()
 

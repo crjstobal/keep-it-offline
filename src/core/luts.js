@@ -5,6 +5,7 @@
 // exported from Lightroom, Resolve or Photoshop will work.
 
 import { imageCall } from './worker-bridge.js';
+import { parseCube } from './lut-math.js';
 
 const LUTS = [
   {
@@ -56,4 +57,28 @@ export async function ensureLutLoaded(name) {
 
   await imageCall('load_lut', { name, text: await response.text() });
   loaded.add(name);
+}
+
+/** @type {Map<string, object>} Parsed tables for the main-thread video path. */
+const parsed = new Map();
+
+/**
+ * The parsed LUT itself, for code that grades on the main thread.
+ *
+ * Images go through the worker, which keeps its own copy; video cannot, because
+ * a <video> element only decodes on the document. Both read the same .cube file
+ * through the same parser, so the look is identical either way.
+ */
+export async function lutFor(name) {
+  if (parsed.has(name)) return parsed.get(name);
+
+  const entry = LUTS.find((lut) => lut.name === name);
+  if (!entry) throw new Error(`Unknown look "${name}".`);
+
+  const response = await fetch(new URL(`../../assets/luts/${entry.file}`, import.meta.url));
+  if (!response.ok) throw new Error(`Could not load the ${name} look.`);
+
+  const table = parseCube(await response.text());
+  parsed.set(name, table);
+  return table;
 }

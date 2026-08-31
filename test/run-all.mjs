@@ -8,7 +8,13 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const NODE_TESTS = ['test-core.mjs', 'test-lut.mjs', 'test-luts-all.mjs', 'test-pdf-preview.mjs'];
+const NODE_TESTS = [
+  'test-core.mjs',
+  'test-lut.mjs',
+  'test-luts-all.mjs',
+  'test-pdf-preview.mjs',
+  'test-video-plan.mjs',
+];
 const BROWSER_TESTS = [
   'test-ui.py',
   'test-registry.py',
@@ -16,6 +22,7 @@ const BROWSER_TESTS = [
   'test-image-ui.py',
   'test-image-live.py',
   'test-adjustments.py',
+  'test-video.py',
 ];
 
 let failures = 0;

@@ -104,6 +104,30 @@ export function init(elements) {
     });
   });
 
+  const scopeOfImages = () => {
+    const images = listAssets('image');
+    return images.length === 1 ? images[0].name : `${images.length} images`;
+  };
+
+  const queueForAll = (type, params, summary) => {
+    const images = listAssets('image');
+    if (images.length === 0) return;
+    pushOperation({ type, assetIds: images.map((a) => a.id), params, summary, source: 'user' });
+  };
+
+  els.rotateLeft.addEventListener('click', () =>
+    queueForAll('rotate_image', { degrees: 270 }, `Rotate ${scopeOfImages()} by 270°`),
+  );
+  els.rotateRight.addEventListener('click', () =>
+    queueForAll('rotate_image', { degrees: 90 }, `Rotate ${scopeOfImages()} by 90°`),
+  );
+  els.orientation.addEventListener('change', () => {
+    const orientation = els.orientation.value;
+    if (!orientation) return;
+    queueForAll('set_image_orientation', { orientation }, `Make ${scopeOfImages()} ${orientation}`);
+    els.orientation.value = '';
+  });
+
   els.applyLook.disabled = true;
 }
 

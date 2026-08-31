@@ -503,3 +503,17 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .viewer:fullscreen { background: #06070a; }
 .viewer:fullscreen .viewer-image { max-width: 96vw; max-height: 94vh; }
 .viewer:fullscreen .viewer-image.is-quarter-turned { max-width: 94vh; max-height: 96vw; }
+
+.video-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  font-size: 10px;
+  color: var(--text);
+  background: rgb(15 17 21 / 0.8);
+  border-radius: 4px;
+  padding: 2px 6px;
+  pointer-events: none;
+}
+.image-frame { position: relative; }
+.image-cell.is-quarter-turned img { max-width: 70%; }

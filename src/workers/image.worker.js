@@ -5,113 +5,10 @@
 // page for seconds. Here the interface stays live and the user can keep working
 // while a batch runs.
 
+import { applyLutToPixels, parseCube } from '../core/lut-math.js';
+
 /** Parsed .cube LUTs, keyed by name, so a batch parses each one once. */
 const lutCache = new Map();
-
-/**
- * Parse an Adobe .cube colour lookup table.
- *
- * The format is a header of key/value lines followed by size^3 RGB triplets,
- * with red varying fastest.
- */
-function parseCube(text) {
-  let size = 0;
-  const table = [];
-
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-
-    if (line.startsWith('LUT_3D_SIZE')) {
-      size = Number(line.split(/\s+/)[1]);
-      continue;
-    }
-    // TITLE and DOMAIN_MIN/MAX carry no information we need: the domain is
-    // always 0-1 for the tables we ship.
-    if (/^[A-Z_]+/.test(line)) continue;
-
-    const parts = line.split(/\s+/).map(Number);
-    if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
-      table.push(parts[0], parts[1], parts[2]);
-    }
-  }
-
-  if (!size || table.length !== size * size * size * 3) {
-    throw new Error(
-      `Malformed .cube file: expected ${size ** 3} entries, found ${table.length / 3}`,
-    );
-  }
-  return { size, table: Float32Array.from(table) };
-}
-
-/** Trilinear sample of the LUT. Values in and out are 0-1. */
-function sampleLut(lut, r, g, b) {
-  const { size, table } = lut;
-  const max = size - 1;
-
-  const fr = r * max;
-  const fg = g * max;
-  const fb = b * max;
-
-  const r0 = Math.floor(fr);
-  const g0 = Math.floor(fg);
-  const b0 = Math.floor(fb);
-  const r1 = Math.min(r0 + 1, max);
-  const g1 = Math.min(g0 + 1, max);
-  const b1 = Math.min(b0 + 1, max);
-
-  const dr = fr - r0;
-  const dg = fg - g0;
-  const db = fb - b0;
-
-  // Red varies fastest, then green, then blue.
-  const at = (ri, gi, bi) => (ri + gi * size + bi * size * size) * 3;
-
-  let out0 = 0;
-  let out1 = 0;
-  let out2 = 0;
-
-  for (let corner = 0; corner < 8; corner++) {
-    const useR1 = corner & 1;
-    const useG1 = corner & 2;
-    const useB1 = corner & 4;
-
-    const weight =
-      (useR1 ? dr : 1 - dr) * (useG1 ? dg : 1 - dg) * (useB1 ? db : 1 - db);
-    if (weight === 0) continue;
-
-    const i = at(useR1 ? r1 : r0, useG1 ? g1 : g0, useB1 ? b1 : b0);
-    out0 += table[i] * weight;
-    out1 += table[i + 1] * weight;
-    out2 += table[i + 2] * weight;
-  }
-
-  return [out0, out1, out2];
-}
-
-/**
- * Apply a LUT to pixel data in place.
- *
- * @param {Uint8ClampedArray} data  RGBA pixels.
- * @param {number} intensity        0 leaves the image alone, 1 applies fully.
- */
-function applyLut(data, lut, intensity = 1) {
-  const amount = Math.min(1, Math.max(0, intensity));
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i] / 255;
-    const g = data[i + 1] / 255;
-    const b = data[i + 2] / 255;
-
-    const [nr, ng, nb] = sampleLut(lut, r, g, b);
-
-    // Blending against the original is what makes intensity meaningful, and it
-    // is why "a bit of this look" is expressible at all.
-    data[i] = (r + (nr - r) * amount) * 255;
-    data[i + 1] = (g + (ng - g) * amount) * 255;
-    data[i + 2] = (b + (nb - b) * amount) * 255;
-    // Alpha is left alone: grading should not change transparency.
-  }
-}
 
 /**
  * Tonal and colour adjustments, applied in one pass over the pixels.
@@ -229,11 +126,40 @@ function fitWithin(width, height, maxWidth, maxHeight) {
   };
 }
 
+/**
+ * Total rotation, and the shape it produces.
+ *
+ * set_orientation turns only what is not already the requested shape, which is
+ * what "make these portrait" means over a mixed batch: turn the ones that need
+ * it, leave the rest.
+ */
+function planRotation(operations, width, height) {
+  let rotation = 0;
+  let w = width;
+  let h = height;
+
+  for (const op of operations) {
+    if (op.type === 'rotate_image') {
+      rotation = (rotation + op.params.degrees) % 360;
+    } else if (op.type === 'set_image_orientation') {
+      const current = w >= h ? 'landscape' : 'portrait';
+      if (current !== op.params.orientation) rotation = (rotation + 90) % 360;
+    } else {
+      continue;
+    }
+    [w, h] = rotation === 90 || rotation === 270 ? [height, width] : [width, height];
+  }
+
+  return { rotation, width: w, height: h };
+}
+
 async function processImage({ bytes, operations, type }) {
   let bitmap = await createImageBitmap(new Blob([bytes], { type }));
   let { width, height } = bitmap;
   let outputType = type;
   let quality = 0.9;
+
+  const turn = planRotation(operations, width, height);
 
   // Resizing first keeps the expensive per-pixel work off pixels that are about
   // to be thrown away.
@@ -249,17 +175,34 @@ async function processImage({ bytes, operations, type }) {
     height = fitted.height;
   }
 
-  const canvas = new OffscreenCanvas(width, height);
+  // Rotation is applied while drawing, so the output canvas already has the
+  // final shape and every later step sees the right dimensions.
+  const quarter = turn.rotation === 90 || turn.rotation === 270;
+  const outWidth = quarter ? height : width;
+  const outHeight = quarter ? width : height;
+
+  const canvas = new OffscreenCanvas(outWidth, outHeight);
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  context.drawImage(bitmap, 0, 0, width, height);
+
+  if (turn.rotation) {
+    context.translate(outWidth / 2, outHeight / 2);
+    context.rotate((turn.rotation * Math.PI) / 180);
+    context.drawImage(bitmap, -width / 2, -height / 2, width, height);
+    context.setTransform(1, 0, 0, 1, 0, 0);
+  } else {
+    context.drawImage(bitmap, 0, 0, width, height);
+  }
   bitmap.close();
+
+  width = outWidth;
+  height = outHeight;
 
   const grade = operations.find((op) => op.type === 'apply_lut');
   if (grade) {
     const lut = lutCache.get(grade.params.lut_name);
     if (!lut) throw new Error(`LUT "${grade.params.lut_name}" was not loaded`);
     const imageData = context.getImageData(0, 0, width, height);
-    applyLut(imageData.data, lut, grade.params.intensity ?? 1);
+    applyLutToPixels(imageData.data, lut, grade.params.intensity ?? 1);
     context.putImageData(imageData, 0, 0);
   }
 

@@ -379,3 +379,70 @@ declareTool({
     },
   },
 });
+
+declareTool({
+  when: hasImages,
+  definition: {
+    name: 'orient_images',
+    description:
+      'Queue a rotation of one or more images. Either give a specific turn in degrees, ' +
+      'or ask for a shape and only the images that do not already have it are turned, ' +
+      'which is what "make these all portrait" means over a mixed set. ' +
+      'Omit file_ids to apply to every loaded image.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        degrees: {
+          type: 'integer',
+          enum: [90, 180, 270],
+          description: 'A specific clockwise rotation. Use this or orientation, not both.',
+        },
+        orientation: {
+          type: 'string',
+          enum: ['portrait', 'landscape'],
+          description: 'The shape the output should have. Images already that shape are skipped.',
+        },
+        file_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Which images to turn. Omit to apply to all of them.',
+        },
+      },
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ degrees, orientation, file_ids }) => {
+      if (!degrees && !orientation) {
+        throw new Error('Give either degrees or an orientation.');
+      }
+      const targets = resolveImages(file_ids);
+      const scope = targets.length === 1 ? targets[0].name : `${targets.length} images`;
+
+      if (degrees) {
+        pushOperation({
+          type: 'rotate_image',
+          assetIds: targets.map((a) => a.id),
+          params: { degrees },
+          summary: `Rotate ${scope} by ${degrees}°`,
+          source: 'agent',
+        });
+        return `Queued a ${degrees}° rotation of ${scope}.`;
+      }
+
+      const needing = targets.filter(
+        (a) => (a.meta.width >= a.meta.height ? 'landscape' : 'portrait') !== orientation,
+      );
+      if (needing.length === 0) {
+        return `Every selected image is already ${orientation}, so there is nothing to do.`;
+      }
+
+      pushOperation({
+        type: 'set_image_orientation',
+        assetIds: targets.map((a) => a.id),
+        params: { orientation },
+        summary: `Make ${scope} ${orientation}`,
+        source: 'agent',
+      });
+      return `Queued turning ${needing.length} of ${targets.length} image(s) to ${orientation}. The rest were already that shape.`;
+    },
+  },
+});
