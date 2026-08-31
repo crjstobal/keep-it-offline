@@ -62,9 +62,19 @@ with sync_playwright() as pw:
           {"apply_look", "resize_images"} <= set(after), str(after))
 
     # What matters is the realistic case: people bring one kind of file at a
-    # time. Loading everything at once is the pathological case and is still
-    # bounded; a single-kind bench is what an agent actually has to choose from.
-    check("a mixed PDF and image bench stays workable", len(both) <= 16, f"{len(both)}: {both}")
+    # time, and that is the choice an agent actually faces. Every single-kind
+    # bench has to stay in the range where a model picks reliably.
+    for kind, fixture in [("pdf", "sensitive.pdf"), ("image", "bars.png"),
+                          ("video", "clip.mp4"), ("audio", "tone.mp3")]:
+        p.evaluate("""async () => {
+            const { getState, removeAsset } = await import('./src/core/workspace.js');
+            for (const a of [...getState().assets]) removeAsset(a.id);
+        }""")
+        p.wait_for_timeout(500)
+        p.set_input_files("#file-input", f"{S}/{fixture}")
+        p.wait_for_timeout(3000)
+        n = len(tools())
+        check(f"a {kind} bench offers a workable number of tools", n <= 13, f"{n}: {tools()}")
 
     # A bench holding only images must not offer PDF tools, and vice versa. This
     # is what keeps the catalogue from being paid for on every request.

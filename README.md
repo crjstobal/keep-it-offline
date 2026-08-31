@@ -1,8 +1,8 @@
 # Keep It Offline
 
-A file workbench that runs entirely in your browser. Edit PDFs, grade photographs
-and cut video without uploading anything, and let an AI agent operate the same
-tools without ever seeing the files themselves.
+A file workbench that runs entirely in your browser. Redact PDFs, grade
+photographs, cut video and speed up audio without uploading anything, and let an
+AI agent operate the same tools without ever seeing the files themselves.
 
 **Live demo:** https://keepitoffline.com
 
@@ -76,6 +76,24 @@ panel says so and every feature remains available by hand.
 **PDFs**: remove, rotate and reorder pages, with a thumbnail grid for doing it by
 hand and an enlarged viewer for checking a page before acting on it.
 
+**Redaction**, which is the case this app was built for. Payslips, contracts and
+medical letters are exactly the documents people should never upload, and every
+free tool online asks them to. Black out literal text, a pattern, or categories
+of personal data (email addresses, phone numbers, IBANs, card numbers, ID
+numbers, dates).
+
+Two details matter here. Redacted pages are **flattened to images**, because a
+black rectangle drawn over text hides nothing: the glyphs stay in the file and
+any reader copies them straight back out. This was verified rather than assumed
+by running `pdftotext` over a boxed file, which returned the "hidden" address in
+full; the test suite now asserts that five kinds of personal data cannot be
+extracted from an export, and that pages with nothing to redact keep their
+selectable text.
+
+And an agent can drive the whole thing **without reading the document**. It names
+a pattern or a category, and what comes back is a count and a list of page
+numbers, never the matched text.
+
 **Images**: rotate, resize to fit a box, convert between WebP, JPEG and PNG,
 adjust brightness, contrast, saturation and vibrance, add a vignette or a
 positioned watermark, and apply colour looks. Grading a batch is where an agent
@@ -91,6 +109,14 @@ kilobytes rather than thirty megabytes.
 Rotation is worth calling out. Asking for a *shape* rather than a *turn* is the
 useful version: "make these all portrait" rotates only the clips that are not
 already portrait and leaves the rest alone, for stills and footage alike.
+
+**Audio**: change speed and trim, over a waveform so a cut can be aimed at
+something visible. Speeding up shifts the pitch, the way a record played fast
+sounds higher, because that is what a browser can do without a time-stretching
+library; the tool says so rather than pretending otherwise.
+
+Because tools are registered per file kind, none of this crowds the others: a
+PDF registers eight tools, images twelve, video eight, audio six.
 
 ## Regenerating the LUTs
 

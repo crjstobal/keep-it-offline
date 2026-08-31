@@ -17,14 +17,17 @@ import { imageCall, pdfCall } from './core/worker-bridge.js';
 import { ensureLutLoaded, lutFor } from './core/luts.js';
 import { applyLutToPixels } from './core/lut-math.js';
 import * as video from './core/video.js';
+import * as audio from './core/audio.js';
 import * as grid from './ui/page-grid.js';
 import * as imagePanel from './ui/image-panel.js';
 import * as videoPanel from './ui/video-panel.js';
+import * as audioPanel from './ui/audio-panel.js';
 
 import './tools/workspace-tools.js';
 import './tools/pdf-tools.js';
 import './tools/image-tools.js';
 import './tools/video-tools.js';
+import './tools/audio-tools.js';
 
 const els = {
   dropzone: document.getElementById('dropzone'),
@@ -44,7 +47,18 @@ const els = {
   removeSelected: document.getElementById('remove-selected'),
   imageEditor: document.getElementById('image-editor'),
   videoEditor: document.getElementById('video-editor'),
+  audioEditor: document.getElementById('audio-editor'),
 };
+
+audioPanel.init({
+  list: document.getElementById('audio-list'),
+  speed: document.getElementById('audio-speed'),
+  speedValue: document.getElementById('audio-speed-value'),
+  applySpeed: document.getElementById('apply-speed'),
+  trimStart: document.getElementById('audio-trim-start'),
+  trimEnd: document.getElementById('audio-trim-end'),
+  applyTrim: document.getElementById('apply-audio-trim'),
+});
 
 videoPanel.init({
   grid: document.getElementById('video-grid'),
@@ -143,6 +157,19 @@ async function ingest(file) {
     return;
   }
 
+  if (file.type.startsWith('audio/')) {
+    const meta = await audio.probe(bytes, file.type);
+    const asset = addAsset({ name: file.name, kind: 'audio', bytes, meta });
+    audio
+      .waveform(bytes)
+      .then((peaks) => {
+        asset.meta.peaks = peaks;
+        touch();
+      })
+      .catch((error) => console.error('[keepitoffline] could not read the waveform', error));
+    return;
+  }
+
   if (file.type.startsWith('video/')) {
     if (!video.isSupported()) {
       console.warn('[keepitoffline] this browser cannot encode video');
@@ -211,6 +238,15 @@ function download(bytes, type, filename) {
 /** Apply the stack to one file and return the bytes, without downloading. */
 async function renderAsset(asset, onProgress) {
   const plain = operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params }));
+
+  if (asset.kind === 'audio') {
+    const result = await audio.render({ bytes: asset.bytes, meta: asset.meta, operations: plain });
+    return {
+      bytes: result.bytes,
+      type: result.type,
+      filename: `${asset.name.replace(/\.[^.]+$/, '')}-edited.wav`,
+    };
+  }
 
   if (asset.kind === 'video') {
     // Grading runs per frame on the main thread, so the LUT is resolved once
@@ -440,6 +476,10 @@ subscribe((state) => {
   const videos = state.assets.filter((a) => a.kind === 'video');
   els.videoEditor.hidden = videos.length === 0;
   if (videos.length > 0) videoPanel.refresh(videos);
+
+  const tracks = state.assets.filter((a) => a.kind === 'audio');
+  els.audioEditor.hidden = tracks.length === 0;
+  if (tracks.length > 0) audioPanel.refresh(tracks);
 
   const pdf = state.assets.find((a) => a.kind === 'pdf');
   const shown = grid.getCurrentAsset();

@@ -517,3 +517,54 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .image-frame { position: relative; }
 .image-cell.is-quarter-turned img { max-width: 70%; }
+
+/* --- Dropzone -------------------------------------------------------------
+   The accepted kinds are shown rather than described: a row of icons answers
+   "what can I put here" before the text is read. */
+
+.dropzone-icons {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  margin-bottom: 18px;
+  color: var(--muted);
+}
+.dropzone-icons .kind {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.dropzone-icons b {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.dropzone:hover .dropzone-icons,
+.dropzone.is-over .dropzone-icons { color: var(--accent); }
+
+/* --- Audio --------------------------------------------------------------- */
+
+.audio-list { display: flex; flex-direction: column; gap: 10px; }
+.audio-row {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.audio-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audio-wave { width: 100%; height: 60px; }
+.audio-meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  .audio-row { grid-template-columns: 1fr; }
+}

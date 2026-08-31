@@ -32,9 +32,27 @@
 
         <div class="dropzone" id="dropzone" tabindex="0" role="button"
              aria-label="Add files. Nothing is uploaded.">
-          <p class="dropzone-main">Drop PDFs, images or video here</p>
+          <div class="dropzone-icons" aria-hidden="true">
+            <span class="kind"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+              <path d="M14 2v5h5"/></svg><b>PDF</b></span>
+            <span class="kind"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L7 20"/></svg><b>Images</b></span>
+            <span class="kind"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m16 10 4.5-2.6a1 1 0 0 1 1.5.9v7.4a1 1 0 0 1-1.5.9L16 14"/>
+              <rect x="2" y="6" width="14" height="12" rx="2"/></svg><b>Video</b></span>
+            <span class="kind"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/>
+              <circle cx="18" cy="16" r="3"/></svg><b>Audio</b></span>
+          </div>
+          <p class="dropzone-main">Drop files here</p>
           <p class="dropzone-sub">They stay on this device. Nothing is uploaded.</p>
-          <input type="file" id="file-input" multiple accept="application/pdf,image/*,video/*" hidden />
+          <input type="file" id="file-input" multiple accept="application/pdf,image/*,video/*,audio/*" hidden />
         </div>
 
         <details class="files-summary" id="files-summary" hidden>
@@ -150,6 +168,29 @@
             <span class="hint-inline" id="video-note">Every frame is processed in this tab.</span>
           </div>
           <div class="image-grid" id="video-grid"></div>
+        </div>
+
+        <div class="editor" id="audio-editor" hidden>
+          <div class="actionbar">
+            <span class="selection-count">Applies to every loaded track</span>
+            <label class="field">
+              Speed
+              <input type="range" id="audio-speed" min="25" max="400" step="5" value="100" />
+              <span id="audio-speed-value">1.00×</span>
+            </label>
+            <button class="ghost" id="apply-speed">Apply speed</button>
+            <span class="sep" aria-hidden="true"></span>
+            <label class="field">
+              From
+              <input type="number" id="audio-trim-start" min="0" step="0.1" placeholder="0" />
+            </label>
+            <label class="field">
+              To
+              <input type="number" id="audio-trim-end" min="0" step="0.1" placeholder="end" />
+            </label>
+            <button class="ghost" id="apply-audio-trim">Trim</button>
+          </div>
+          <div class="audio-list" id="audio-list"></div>
         </div>
       </section>
 

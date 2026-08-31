@@ -8,6 +8,7 @@
 import { declareTool } from '../core/registry.js';
 import { getAsset, listAssets, operationsFor, pushOperation } from '../core/workspace.js';
 import { previewPages } from '../core/preview.js';
+import { findMatches, rasterisePages } from '../core/redact.js';
 
 const hasPdf = (kinds) => kinds.has('pdf');
 
@@ -175,6 +176,120 @@ declareTool({
         source: 'agent',
       });
       return `Queued a ${deg}° rotation of ${indices.length} page(s) in ${asset.name}.`;
+    },
+  },
+});
+
+declareTool({
+  when: hasPdf,
+  definition: {
+    name: 'find_in_pdf',
+    description:
+      'Count occurrences of some text or a pattern in a PDF and report which pages they ' +
+      'are on. This deliberately returns counts and page numbers only, never the matched ' +
+      'text or its surroundings: use it to locate things without the document contents ' +
+      'passing through you. Returns JSON.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Literal text to look for.' },
+        pattern: {
+          type: 'string',
+          description: 'A regular expression, as an alternative to text.',
+        },
+        categories: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['email', 'phone', 'iban', 'card', 'id_number', 'date'],
+          },
+          description: 'Kinds of personal data to look for.',
+        },
+        file_id: { type: 'string', description: 'Optional when only one PDF is loaded.' },
+      },
+    },
+    annotations: { readOnlyHint: true },
+    execute: async ({ text, pattern, categories, file_id }) => {
+      const asset = resolvePdf(file_id);
+      if (!text && !pattern && !categories?.length) {
+        throw new Error('Give text, a pattern, or at least one category to look for.');
+      }
+
+      const { total, pages, pageCount } = await findMatches(asset.bytes, {
+        text,
+        pattern,
+        categories,
+      });
+      return JSON.stringify({
+        file_id: asset.id,
+        matches: total,
+        pages_with_matches: pages.map((p) => p.page),
+        page_count: pageCount,
+        note: 'Counts and page numbers only. The matched text is not returned.',
+      });
+    },
+  },
+});
+
+declareTool({
+  when: hasPdf,
+  definition: {
+    name: 'redact_pdf',
+    description:
+      'Permanently black out text in a PDF. Give literal text, a pattern, or categories of ' +
+      'personal data such as email addresses or card numbers. Redacted pages are flattened ' +
+      'to images, so the covered text is removed from the file rather than merely hidden ' +
+      'behind a rectangle, which is what most tools do and why their output can be copied ' +
+      'straight back out. This runs entirely in the browser: the document is never uploaded, ' +
+      'and the matched text is not returned to you.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Literal text to black out.' },
+        pattern: { type: 'string', description: 'A regular expression, as an alternative.' },
+        categories: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['email', 'phone', 'iban', 'card', 'id_number', 'date'],
+          },
+          description: 'Kinds of personal data to black out.',
+        },
+        file_id: { type: 'string', description: 'Optional when only one PDF is loaded.' },
+      },
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ text, pattern, categories, file_id }) => {
+      const asset = resolvePdf(file_id);
+      if (!text && !pattern && !categories?.length) {
+        throw new Error('Give text, a pattern, or at least one category to redact.');
+      }
+
+      const { total, pages } = await findMatches(asset.bytes, { text, pattern, categories });
+      if (total === 0) {
+        return 'Nothing matched, so there is nothing to redact. Try find_in_pdf with a broader pattern.';
+      }
+
+      // The flattened pages are produced here, on the main thread, because
+      // rendering needs a canvas; the worker only assembles the final file.
+      const rendered = await rasterisePages(asset.bytes, pages);
+      const what = [
+        text && `"${text}"`,
+        pattern && `pattern /${pattern}/`,
+        categories?.length && categories.join(', '),
+      ]
+        .filter(Boolean)
+        .join(', ');
+
+      pushOperation({
+        type: 'redact',
+        assetIds: asset.id,
+        params: { rendered, pages: pages.map((p) => p.page) },
+        summary: `Redact ${total} match${total === 1 ? '' : 'es'} of ${what}`,
+        source: 'agent',
+      });
+
+      return `Queued redaction of ${total} match(es) across ${pages.length} page(s) of ${asset.name}. Those pages are flattened to images on export, so the text is removed rather than covered. The user can see the operation and undo it before exporting.`;
     },
   },
 });

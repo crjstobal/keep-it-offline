@@ -23,6 +23,8 @@ const BROWSER_TESTS = [
   'test-image-live.py',
   'test-adjustments.py',
   'test-video.py',
+  'test-audio.py',
+  'test-redaction.py',
 ];
 
 let failures = 0;
