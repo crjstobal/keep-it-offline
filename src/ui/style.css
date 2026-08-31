@@ -241,12 +241,34 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .page-cell.is-removed { opacity: 0.32; }
 .page-cell.is-removed img { filter: grayscale(1); }
 
-.page-cell img {
+/* Rotation in CSS does not change the space an element reserves, so the frame
+   is a square: the one shape that fits the same page at any rotation. The page
+   is capped at 1/1.414 of the square (the A4 short-to-long ratio) on whichever
+   axis is its long edge, so an upright page and a turned one are drawn at the
+   same size, fully visible, without either escaping its cell. */
+.page-frame {
   width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+.page-cell img {
+  max-width: 70.7cqw;
+  max-height: 100cqw;
+  width: auto;
   height: auto;
   border-radius: 3px;
   background: #fff;
   transition: rotate 0.2s;
+}
+
+/* Turned a quarter, the long edge runs horizontally: swap which axis is capped. */
+.page-cell.is-quarter-turned img {
+  max-width: 100cqw;
+  max-height: 70.7cqw;
 }
 
 .page-check {

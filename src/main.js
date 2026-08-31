@@ -56,7 +56,7 @@ for (const button of document.querySelectorAll('[data-select]')) {
     const mode = button.dataset.select;
     mode === 'none'
       ? grid.clearSelection(els.gridHost)
-      : grid.selectByParity(els.gridHost, mode);
+      : grid.selectPages(els.gridHost, mode);
   });
 }
 

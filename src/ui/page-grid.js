@@ -62,10 +62,14 @@ function fillCell(cell, index, dataUrl) {
   cell.classList.remove('is-loading');
   cell.replaceChildren();
 
+  const frame = document.createElement('div');
+  frame.className = 'page-frame';
+
   const img = document.createElement('img');
   img.src = dataUrl;
   img.alt = `Page ${index + 1}`;
   img.loading = 'lazy';
+  frame.append(img);
 
   const label = document.createElement('span');
   label.className = 'page-number';
@@ -81,7 +85,7 @@ function fillCell(cell, index, dataUrl) {
     onChange(selection.size);
   });
 
-  cell.append(check, img, label);
+  cell.append(check, frame, label);
 }
 
 /** Grey out pages the enabled operations would remove, and apply rotations. */
@@ -98,8 +102,17 @@ export function refresh(container) {
     const index = Number(cell.dataset.index);
     const isKept = kept.has(index);
     cell.classList.toggle('is-removed', !isKept);
+
+    const rotation = kept.get(index) ?? 0;
     const img = cell.querySelector('img');
-    if (img) img.style.rotate = `${kept.get(index) ?? 0}deg`;
+    if (!img) continue;
+
+    img.style.rotate = `${rotation}deg`;
+    // At a quarter turn the page is wider than it is tall, so the frame has to
+    // swap its proportions too. Without this the image keeps its upright
+    // footprint and spills over the neighbouring cells.
+    const quarterTurned = rotation === 90 || rotation === 270;
+    cell.classList.toggle('is-quarter-turned', quarterTurned);
   }
 }
 
@@ -153,14 +166,20 @@ export function rotateSelected(container, deg) {
   clearSelection(container);
 }
 
-/** Select every page whose number matches a parity, for "remove the even pages". */
-export function selectByParity(container, parity) {
+/**
+ * Bulk selection. 'even' and 'odd' go by page number, not index, because that
+ * is what "remove the even pages" means to a person.
+ *
+ * @param {'all' | 'even' | 'odd'} mode
+ */
+export function selectPages(container, mode) {
   if (!currentAsset) return;
   selection.clear();
   for (const cell of container.querySelectorAll('.page-cell')) {
     const index = Number(cell.dataset.index);
     const pageNumber = index + 1;
-    const wanted = parity === 'even' ? pageNumber % 2 === 0 : pageNumber % 2 === 1;
+    const wanted =
+      mode === 'all' ? true : mode === 'even' ? pageNumber % 2 === 0 : pageNumber % 2 === 1;
     const check = cell.querySelector('.page-check');
     if (check) check.checked = wanted;
     cell.classList.toggle('is-selected', wanted);
