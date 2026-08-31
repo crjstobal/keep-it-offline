@@ -4,23 +4,33 @@
 
 import { PDFDocument, degrees } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
 
-/** Apply the enabled operation stack to one document, in order. */
+/**
+ * Apply the enabled operation stack to one document, in order.
+ *
+ * Every step rebuilds the document by copying the pages it wants into a fresh
+ * one. That is deliberate: pdf-lib's removePage leaves getPages() returning the
+ * original list, so mutating in place means later operations address pages that
+ * are no longer in the document and their changes are silently dropped on save.
+ * Rebuilding keeps indices honest, and matches previewPages() exactly.
+ */
 async function applyOperations(bytes, operations) {
   let doc = await PDFDocument.load(bytes);
 
   for (const op of operations) {
     switch (op.type) {
       case 'remove_pages': {
-        // Remove from the end so earlier indices stay valid.
-        const indices = [...new Set(op.params.pages)].sort((a, b) => b - a);
-        for (const i of indices) {
-          if (i >= 0 && i < doc.getPageCount()) doc.removePage(i);
+        const drop = new Set(op.params.pages);
+        const keep = [];
+        for (let i = 0; i < doc.getPageCount(); i++) {
+          if (!drop.has(i)) keep.push(i);
         }
+        doc = await rebuild(doc, keep);
         break;
       }
       case 'rotate_pages': {
+        const turn = new Set(op.params.pages);
         const pages = doc.getPages();
-        for (const i of op.params.pages) {
+        for (const i of turn) {
           const page = pages[i];
           if (!page) continue;
           const current = page.getRotation().angle;
@@ -29,11 +39,7 @@ async function applyOperations(bytes, operations) {
         break;
       }
       case 'reorder_pages': {
-        const source = doc;
-        const target = await PDFDocument.create();
-        const copied = await target.copyPages(source, op.params.order);
-        for (const page of copied) target.addPage(page);
-        doc = target;
+        doc = await rebuild(doc, op.params.order);
         break;
       }
       default:
@@ -44,6 +50,15 @@ async function applyOperations(bytes, operations) {
   }
 
   return doc;
+}
+
+/** A new document holding the given source pages, in the given order. */
+async function rebuild(doc, indices) {
+  const valid = indices.filter((i) => i >= 0 && i < doc.getPageCount());
+  const target = await PDFDocument.create();
+  const copied = await target.copyPages(doc, valid);
+  for (const page of copied) target.addPage(page);
+  return target;
 }
 
 async function describe(bytes) {

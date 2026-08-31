@@ -38,6 +38,20 @@
         </div>
 
         <ul class="asset-list" id="asset-list"></ul>
+
+        <div class="editor" id="editor" hidden>
+          <div class="actionbar">
+            <span class="selection-count" id="selection-count">No pages selected</span>
+            <button class="ghost" data-select="odd">Select odd</button>
+            <button class="ghost" data-select="even">Select even</button>
+            <button class="ghost" data-select="none">Clear</button>
+            <span class="sep" aria-hidden="true"></span>
+            <button class="ghost" id="rotate-left" disabled>Rotate ↺</button>
+            <button class="ghost" id="rotate-right" disabled>Rotate ↻</button>
+            <button class="danger" id="remove-selected" disabled>Remove selected</button>
+          </div>
+          <div id="page-grid-host"></div>
+        </div>
       </section>
 
       <aside class="side">

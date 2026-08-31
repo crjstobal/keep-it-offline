@@ -6,7 +6,8 @@
 // is what makes it safe to let an agent drive.
 
 import { declareTool } from '../core/registry.js';
-import { getAsset, listAssets, pushOperation } from '../core/workspace.js';
+import { getAsset, listAssets, operationsFor, pushOperation } from '../core/workspace.js';
+import { previewPages } from '../core/preview.js';
 
 const hasPdf = (kinds) => kinds.has('pdf');
 
@@ -107,6 +108,19 @@ declareTool({
       const asset = resolvePdf(file_id);
       const indices = toIndices(pages, asset.meta.pageCount);
       const sorted = [...pages].sort((a, b) => a - b);
+
+      // A PDF with no pages is not a valid file, so refuse rather than
+      // producing something the user cannot open.
+      const remaining = previewPages(asset.meta.pageCount, [
+        ...operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params })),
+        { type: 'remove_pages', params: { pages: indices } },
+      ]);
+      if (remaining.length === 0) {
+        throw new Error(
+          'That would remove every page, and a PDF must keep at least one. ' +
+            'Leave at least one page, or remove the file from the bench instead.',
+        );
+      }
       pushOperation({
         type: 'remove_pages',
         assetId: asset.id,

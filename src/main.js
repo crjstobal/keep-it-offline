@@ -13,6 +13,7 @@ import {
 } from './core/workspace.js';
 import { isSupported, onRegistryChange, start } from './core/registry.js';
 import { pdfCall } from './core/worker-bridge.js';
+import * as grid from './ui/page-grid.js';
 
 import './tools/workspace-tools.js';
 import './tools/pdf-tools.js';
@@ -27,7 +28,41 @@ const els = {
   exportBtn: document.getElementById('export-btn'),
   agentStatus: document.getElementById('agent-status'),
   agentStatusText: document.getElementById('agent-status-text'),
+  editor: document.getElementById('editor'),
+  gridHost: document.getElementById('page-grid-host'),
+  selectionCount: document.getElementById('selection-count'),
+  rotateLeft: document.getElementById('rotate-left'),
+  rotateRight: document.getElementById('rotate-right'),
+  removeSelected: document.getElementById('remove-selected'),
 };
+
+// --- Manual editing --------------------------------------------------------
+// Everything here is available with no agent attached. The tools and these
+// buttons push identical operations onto the same stack.
+
+grid.init({
+  container: els.gridHost,
+  onSelectionChange: (count) => {
+    els.selectionCount.textContent =
+      count === 0 ? 'No pages selected' : `${count} page${count === 1 ? '' : 's'} selected`;
+    for (const button of [els.rotateLeft, els.rotateRight, els.removeSelected]) {
+      button.disabled = count === 0;
+    }
+  },
+});
+
+for (const button of document.querySelectorAll('[data-select]')) {
+  button.addEventListener('click', () => {
+    const mode = button.dataset.select;
+    mode === 'none'
+      ? grid.clearSelection(els.gridHost)
+      : grid.selectByParity(els.gridHost, mode);
+  });
+}
+
+els.removeSelected.addEventListener('click', () => grid.removeSelected(els.gridHost));
+els.rotateLeft.addEventListener('click', () => grid.rotateSelected(els.gridHost, 270));
+els.rotateRight.addEventListener('click', () => grid.rotateSelected(els.gridHost, 90));
 
 // --- Loading files ---------------------------------------------------------
 
@@ -205,6 +240,24 @@ function renderTools(names) {
 subscribe((state) => {
   renderAssets(state);
   renderOperations(state);
+
+  // Show the first PDF in the editor, and keep the grid in step with the stack
+  // so a page removed by the agent greys out as soon as the tool returns.
+  const pdf = state.assets.find((a) => a.kind === 'pdf');
+  const shown = grid.getCurrentAsset();
+
+  if (!pdf) {
+    els.editor.hidden = true;
+    if (shown) grid.showAsset(null, els.gridHost);
+    return;
+  }
+
+  els.editor.hidden = false;
+  if (!shown || shown.id !== pdf.id) {
+    grid.showAsset(pdf, els.gridHost).then(() => grid.refresh(els.gridHost));
+  } else {
+    grid.refresh(els.gridHost);
+  }
 });
 
 // --- Agent wiring ----------------------------------------------------------
