@@ -145,8 +145,30 @@ for (const [id, apply] of [
 
 els.removeSelected.addEventListener('click', () => grid.removeSelected(els.gridHost));
 
-// Two different retreats, kept apart on purpose. Undo all keeps the files and
-// drops the edits; Start over clears the bench entirely.
+// Three retreats of increasing size, kept apart on purpose. Undo takes back the
+// last change; Undo all keeps the files and drops every edit; Start over clears
+// the bench entirely.
+//
+// This one does not ask. A confirmation on an undo is a dialog standing between
+// somebody and the thing that was going to reassure them, and it costs nothing
+// to get wrong: the step is still on the stack to tick back on.
+function undoLast() {
+  const ops = getState().operations;
+  if (ops.length === 0) return;
+  removeOperation(ops[ops.length - 1].id);
+}
+
+document.getElementById('undo-last').addEventListener('click', undoLast);
+
+// A button labelled Undo has to answer to the shortcut, or the label is a lie.
+// Typing in a field is left alone: there the browser's own undo is the right one.
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'z' || !(event.metaKey || event.ctrlKey) || event.shiftKey) return;
+  const el = document.activeElement;
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+  event.preventDefault();
+  undoLast();
+});
 document.getElementById('clear-changes').addEventListener('click', () => {
   const count = getState().operations.length;
   if (!count) return;
@@ -625,6 +647,8 @@ export function makeRemoveButton(asset) {
 function renderOperations(state) {
   els.opList.replaceChildren();
   document.getElementById('clear-changes').hidden = state.operations.length === 0;
+  // Nothing to take back until something has been done, whoever did it.
+  document.getElementById('undo-last').hidden = state.operations.length === 0;
 
   if (state.operations.length === 0) {
     const li = document.createElement('li');

@@ -198,6 +198,37 @@ with sync_playwright() as pw:
     p.select_option("#look-select", "")
     p.wait_for_timeout(1500)
 
+
+    # --- Undo, in the header ------------------------------------------------
+    # Three retreats of increasing size: Undo takes back the last change, Undo
+    # all drops every edit, Start over clears the bench.
+    p.evaluate("""async () => {
+        const { clearOperations } = await import('./src/core/workspace.js');
+        clearOperations();
+    }""")
+    p.wait_for_timeout(800)
+    check("undo is hidden when there is nothing to take back",
+          p.locator("#undo-last").is_visible() is False)
+
+    p.click("#image-rotate-right"); p.wait_for_timeout(1200)
+    p.select_option("#look-select", "black-and-white"); p.wait_for_timeout(2500)
+    rows = lambda: p.locator(".op").count()
+    before = rows()
+    check("undo appears once there is a change", p.locator("#undo-last").is_visible(),
+          str(before))
+
+    # It takes back the newest change, and does not stop to ask.
+    p.click("#undo-last"); p.wait_for_timeout(1500)
+    check("undo removes exactly one row", rows() == before - 1, f"{before} -> {rows()}")
+    left = p.evaluate("()=>[...document.querySelectorAll('.op-summary')].map(e=>e.textContent)")
+    check("and it is the most recent one that goes",
+          not any("look" in t for t in left), str(left))
+
+    p.keyboard.press("Meta+z"); p.wait_for_timeout(1500)
+    check("the keyboard shortcut does the same", rows() == before - 2, str(rows()))
+    check("undo hides again when the stack is empty",
+          p.locator("#undo-last").is_visible() is False)
+
     check("no errors throughout", not errors, "; ".join(errors[:3]))
     p.screenshot(path=f"{S}/../live-preview.png", full_page=True)
     b.close()
