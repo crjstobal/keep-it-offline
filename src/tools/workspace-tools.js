@@ -29,9 +29,16 @@ declareTool({
           width: a.meta.width,
           height: a.meta.height,
         })),
+        // A kind-scoped operation covers whatever is loaded now, so it is
+        // reported by the files it actually covers rather than by an id list it
+        // does not keep. `applies_to` tells the agent it will also catch files
+        // the user adds later, which changes what it should do about it.
         pending_operations: state.operations.map((op) => ({
           operation_id: op.id,
-          file_ids: op.assetIds,
+          file_ids: op.scope
+            ? state.assets.filter((a) => a.kind === op.scope).map((a) => a.id)
+            : op.assetIds,
+          applies_to: op.scope ? `every ${op.scope} on the bench, including ones added later` : 'the listed files',
           type: op.type,
           summary: op.summary,
           enabled: op.enabled,

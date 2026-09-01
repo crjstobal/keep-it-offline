@@ -16,6 +16,7 @@ const NODE_TESTS = [
   'test-video-plan.mjs',
 ];
 const BROWSER_TESTS = [
+  'test-offline.py',
   'test-ui.py',
   'test-registry.py',
   'test-image-pipeline.py',

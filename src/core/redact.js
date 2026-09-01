@@ -9,10 +9,10 @@
 // the matches, and what comes back is a count and a list of page numbers. The
 // text itself never reaches the model.
 
-import * as pdfjs from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
+import * as pdfjs from '../../assets/vendor/pdf.min.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc =
-  'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+  new URL('../../assets/vendor/pdf.worker.min.mjs', import.meta.url).href;
 
 /**
  * Categories of personal data, as patterns.

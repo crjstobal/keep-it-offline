@@ -12,6 +12,19 @@ import { availableLuts } from '../core/luts.js';
 const hasImages = (kinds) => kinds.has('image');
 
 /** Images the tool should act on: named ids, or every image loaded. */
+/**
+ * How an operation should be addressed on the stack.
+ *
+ * A call that named no ids meant "all of them", which is a standing decision:
+ * scope it to the kind so files added later arrive with it already applied. A
+ * call that named ids meant those files, and stays pinned to them.
+ */
+function targetOf(fileIds, targets) {
+  return fileIds && fileIds.length > 0
+    ? { assetIds: targets.map((a) => a.id) }
+    : { scope: 'image' };
+}
+
 function resolveImages(fileIds) {
   const images = listAssets('image');
   if (images.length === 0) throw new Error('No images are loaded.');
@@ -78,7 +91,7 @@ declareTool({
     description:
       'Queue a resize of one or more images to fit within a box, keeping their aspect ' +
       'ratio. Images smaller than the box are left alone rather than being enlarged. ' +
-      'Omit file_ids to apply to every loaded image. Adds a reversible operation to the stack.',
+      'Omit file_ids to make it a standing rule over every loaded image, including ones the user adds later. Adds a reversible operation to the stack.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -87,7 +100,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which images to resize. Omit to apply to all of them.',
+          description: 'Which images to resize. Omit to cover all of them, now and as more are added.',
         },
       },
     },
@@ -103,7 +116,7 @@ declareTool({
 
       pushOperation({
         type: 'resize_images',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { max_width, max_height },
         summary:
           targets.length === 1
@@ -141,7 +154,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which images to grade. Omit to apply to all of them.',
+          description: 'Which images to grade. Omit to cover all of them, now and as more are added.',
         },
       },
       required: ['look'],
@@ -158,7 +171,7 @@ declareTool({
       const scope = targets.length === 1 ? targets[0].name : `${targets.length} images`;
       pushOperation({
         type: 'apply_lut',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { lut_name: look, intensity: strength },
         summary:
           strength === 1
@@ -198,7 +211,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which images to convert. Omit to apply to all of them.',
+          description: 'Which images to convert. Omit to cover all of them, now and as more are added.',
         },
       },
       required: ['format'],
@@ -208,7 +221,7 @@ declareTool({
       const targets = resolveImages(file_ids);
       pushOperation({
         type: 'convert_format',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { format, quality },
         summary:
           targets.length === 1
@@ -229,7 +242,7 @@ declareTool({
       'Queue tonal and colour adjustments over one or more images. All four controls ' +
       'run in a single pass, so pass everything you want to change in one call rather ' +
       'than calling this repeatedly. Values run from -1 to 1, where 0 changes nothing. ' +
-      'Omit file_ids to apply to every loaded image.',
+      'Omit file_ids to make it a standing rule over every loaded image, including ones the user adds later.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -251,7 +264,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which images to adjust. Omit to apply to all of them.',
+          description: 'Which images to adjust. Omit to cover all of them, now and as more are added.',
         },
       },
     },
@@ -268,7 +281,7 @@ declareTool({
 
       pushOperation({
         type: 'adjust_image',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params,
         summary: `Adjust ${scope}: ${described}`,
         source: 'agent',
@@ -284,7 +297,7 @@ declareTool({
     name: 'add_vignette',
     description:
       'Queue a vignette, darkening the corners to draw the eye towards the middle. ' +
-      'Omit file_ids to apply to every loaded image.',
+      'Omit file_ids to make it a standing rule over every loaded image, including ones the user adds later.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -297,7 +310,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which images to vignette. Omit to apply to all of them.',
+          description: 'Which images to vignette. Omit to cover all of them, now and as more are added.',
         },
       },
     },
@@ -309,7 +322,7 @@ declareTool({
 
       pushOperation({
         type: 'apply_vignette',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { amount: strength },
         summary: `Vignette ${scope} at ${Math.round(strength * 100)}%`,
         source: 'agent',
@@ -326,7 +339,7 @@ declareTool({
     description:
       'Queue a text watermark over one or more images, in one of nine positions. ' +
       'The text is drawn in the browser: it is never sent anywhere. ' +
-      'Omit file_ids to apply to every loaded image.',
+      'Omit file_ids to make it a standing rule over every loaded image, including ones the user adds later.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -357,7 +370,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which images to mark. Omit to apply to all of them.',
+          description: 'Which images to mark. Omit to cover all of them, now and as more are added.',
         },
       },
       required: ['text'],
@@ -370,7 +383,7 @@ declareTool({
 
       pushOperation({
         type: 'add_watermark',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { text, position, opacity, size },
         summary: `Watermark ${scope} with "${text}" (${position})`,
         source: 'agent',
@@ -388,7 +401,7 @@ declareTool({
       'Queue a rotation of one or more images. Either give a specific turn in degrees, ' +
       'or ask for a shape and only the images that do not already have it are turned, ' +
       'which is what "make these all portrait" means over a mixed set. ' +
-      'Omit file_ids to apply to every loaded image.',
+      'Omit file_ids to make it a standing rule over every loaded image, including ones the user adds later.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -405,7 +418,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which images to turn. Omit to apply to all of them.',
+          description: 'Which images to turn. Omit to cover all of them, now and as more are added.',
         },
       },
     },
@@ -420,7 +433,7 @@ declareTool({
       if (degrees) {
         pushOperation({
           type: 'rotate_image',
-          assetIds: targets.map((a) => a.id),
+          ...targetOf(file_ids, targets),
           params: { degrees },
           summary: `Rotate ${scope} by ${degrees}°`,
           source: 'agent',
@@ -437,7 +450,7 @@ declareTool({
 
       pushOperation({
         type: 'set_image_orientation',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { orientation },
         summary: `Make ${scope} ${orientation}`,
         source: 'agent',
@@ -456,7 +469,7 @@ declareTool({
       'a circular avatar or an organic cut-out. Position and size are fractions of the ' +
       'image (0.5, 0.5 is the centre), so the mask means the same thing whatever size the ' +
       'image is exported at. The output becomes PNG when needed, since JPEG cannot hold ' +
-      'transparency. Omit file_ids to apply to every loaded image.',
+      'transparency. Omit file_ids to make it a standing rule over every loaded image, including ones added later.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -487,7 +500,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which images to mask. Omit to apply to all of them.',
+          description: 'Which images to mask. Omit to cover all of them, now and as more are added.',
         },
       },
       required: ['shape'],
@@ -499,7 +512,7 @@ declareTool({
 
       pushOperation({
         type: 'apply_mask',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: {
           shape,
           x,

@@ -44,9 +44,11 @@ export function init(elements) {
     els.lookSelect.append(option);
   }
 
+  // These controls cover the photographs as a set, not a fixed list, so the row
+  // must not freeze a count that a later drop would make wrong.
   const scopeOfImages = () => {
     const images = listAssets('image');
-    return images.length === 1 ? images[0].name : `${images.length} images`;
+    return images.length === 1 ? images[0].name : 'every photo';
   };
 
   /**
@@ -73,7 +75,7 @@ export function init(elements) {
     }
     const op = pushOperation({
       type,
-      assetIds: images.map((a) => a.id),
+      scope: 'image',
       params,
       summary,
       source: 'user',
@@ -223,7 +225,7 @@ export function init(elements) {
   const queueForAll = (type, params, summary) => {
     const images = listAssets('image');
     if (images.length === 0) return;
-    pushOperation({ type, assetIds: images.map((a) => a.id), params, summary, source: 'user' });
+    pushOperation({ type, scope: 'image', params, summary, source: 'user' });
   };
 
   /**
@@ -253,7 +255,7 @@ export function init(elements) {
     if (images.length === 0) return;
     rotationOpId = pushOperation({
       type: 'rotate_image',
-      assetIds: images.map((a) => a.id),
+      scope: 'image',
       params: { degrees: total },
       summary,
       source: 'user',

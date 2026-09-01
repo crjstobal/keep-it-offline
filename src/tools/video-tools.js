@@ -12,6 +12,19 @@ import { plan } from '../core/video.js';
 
 const hasVideo = (kinds) => kinds.has('video');
 
+/**
+ * How an operation should be addressed on the stack.
+ *
+ * A call that named no ids meant "all of them", which is a standing decision:
+ * scope it to the kind so files added later arrive with it already applied. A
+ * call that named ids meant those files, and stays pinned to them.
+ */
+function targetOf(fileIds, targets) {
+  return fileIds && fileIds.length > 0
+    ? { assetIds: targets.map((a) => a.id) }
+    : { scope: 'video' };
+}
+
 function resolveVideos(fileIds) {
   const videos = listAssets('video');
   if (videos.length === 0) throw new Error('No videos are loaded.');
@@ -66,7 +79,7 @@ declareTool({
     description:
       'Queue a trim, keeping only the section between two times in seconds. ' +
       'Call describe_videos first to find out how long the clip is. ' +
-      'Omit file_ids to apply to every loaded video.',
+      'Omit file_ids to make it a standing rule over every loaded video, including ones the user adds later.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -113,7 +126,7 @@ declareTool({
       'Queue a rotation of one or more videos, for clips filmed sideways. Either give a ' +
       'specific turn in degrees, or ask for a shape and only the clips that do not already ' +
       'have it are turned, which is what "make these all portrait" means over a mixed set. ' +
-      'Omit file_ids to apply to every loaded video.',
+      'Omit file_ids to make it a standing rule over every loaded video, including ones the user adds later.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -130,7 +143,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which videos to turn. Omit to apply to all of them.',
+          description: 'Which videos to turn. Omit to cover all of them, now and as more are added.',
         },
       },
     },
@@ -142,7 +155,7 @@ declareTool({
       if (degrees) {
         pushOperation({
           type: 'rotate_video',
-          assetIds: targets.map((a) => a.id),
+          ...targetOf(file_ids, targets),
           params: { degrees },
           summary: `Rotate ${scopeOf(targets)} by ${degrees}°`,
           source: 'agent',
@@ -157,7 +170,7 @@ declareTool({
 
       pushOperation({
         type: 'set_orientation',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { orientation },
         summary: `Make ${scopeOf(targets)} ${orientation}`,
         source: 'agent',
@@ -181,7 +194,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which videos to resize. Omit to apply to all of them.',
+          description: 'Which videos to resize. Omit to cover all of them, now and as more are added.',
         },
       },
       required: ['max_width'],
@@ -191,7 +204,7 @@ declareTool({
       const targets = resolveVideos(file_ids);
       pushOperation({
         type: 'resize_video',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { max_width },
         summary: `Resize ${scopeOf(targets)} to fit ${max_width}px wide`,
         source: 'agent',
@@ -222,7 +235,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which videos to grade. Omit to apply to all of them.',
+          description: 'Which videos to grade. Omit to cover all of them, now and as more are added.',
         },
       },
       required: ['look'],
@@ -238,7 +251,7 @@ declareTool({
 
       pushOperation({
         type: 'apply_lut',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { lut_name: look, intensity: strength },
         summary:
           strength === 1

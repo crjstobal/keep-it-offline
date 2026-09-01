@@ -24,12 +24,14 @@ let els = {};
 /** Per-clip playback state, keyed by asset id. */
 const clips = new Map();
 
-const scopeOf = (list) => (list.length === 1 ? list[0].name : `${list.length} videos`);
+// Whole-clip controls cover the videos as a set, so the row must not freeze a
+// count that a later drop would make wrong.
+const scopeOf = (list) => (list.length === 1 ? list[0].name : 'every clip');
 
 function queue(type, params, summary) {
   const list = listAssets('video');
   if (list.length === 0) return;
-  pushOperation({ type, assetIds: list.map((a) => a.id), params, summary, source: 'user' });
+  pushOperation({ type, scope: 'video', params, summary, source: 'user' });
 }
 
 export function init(elements) {
@@ -61,7 +63,7 @@ export function init(elements) {
       await ensureLutLoaded(look).catch(() => {});
       const op = pushOperation({
         type: 'apply_lut',
-        assetIds: listAssets('video').map((a) => a.id),
+        scope: 'video',
         params: { lut_name: look, intensity: Number(els.strength.value) / 100 },
         summary: `Grade ${scopeOf(listAssets('video'))} with the ${look} look`,
         source: 'user',
@@ -109,7 +111,7 @@ export function init(elements) {
     if (list.length === 0) return;
     rotationOpId = pushOperation({
       type: 'rotate_video',
-      assetIds: list.map((a) => a.id),
+      scope: 'video',
       params: { degrees: total },
       summary,
       source: 'user',

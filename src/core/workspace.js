@@ -52,10 +52,16 @@ export function removeAsset(id) {
   // Drop the file from any operation that covered it, and drop operations that
   // are left covering nothing. A batch over forty images survives one of them
   // being removed.
+  // A kind-scoped operation carries no ids and outlives any single file: it is
+  // dropped only when the last file of its kind goes.
   for (const op of state.operations) {
+    if (op.scope) continue;
     op.assetIds = op.assetIds.filter((assetId) => assetId !== id);
   }
-  state.operations = state.operations.filter((op) => op.assetIds.length > 0);
+  const liveKinds = new Set(state.assets.map((a) => a.kind));
+  state.operations = state.operations.filter((op) =>
+    op.scope ? liveKinds.has(op.scope) : op.assetIds.length > 0,
+  );
   if (state.assets.length !== before) notify();
 }
 
@@ -111,19 +117,27 @@ export function loadedKinds() {
  * single thing the user did, and it should be one line in the stack that undoes
  * in one click, not forty identical entries.
  *
+ * An operation can instead cover a whole kind. "Warm up the photographs" is a
+ * decision about the photographs on the bench, not about the six that happened
+ * to be loaded when the slider moved: drop four more in and they arrive graded
+ * like the rest. Pass `scope: 'image'` for that; pass explicit ids when the user
+ * or the agent really did single files out.
+ *
  * @param {Object} op
  * @param {string} op.type                 e.g. 'remove_pages'
- * @param {string|string[]} op.assetIds    One id or several.
+ * @param {string|string[]} [op.assetIds]  One id or several.
+ * @param {AssetKind} [op.scope]           Cover every file of this kind, including later ones.
  * @param {Object} op.params
  * @param {string} op.summary              Human-readable, shown in the stack UI.
  * @param {'agent'|'user'} op.source
  */
-export function pushOperation({ type, assetIds, params, summary, source = 'user' }) {
-  const ids = Array.isArray(assetIds) ? [...assetIds] : [assetIds];
+export function pushOperation({ type, assetIds, scope, params, summary, source = 'user' }) {
+  const ids = assetIds === undefined ? [] : Array.isArray(assetIds) ? [...assetIds] : [assetIds];
   const op = {
     id: makeId('op'),
     type,
     assetIds: ids,
+    scope,
     params,
     summary,
     source,
@@ -179,7 +193,15 @@ export function clearOperations() {
   notify();
 }
 
+/** Does this operation cover this asset: named explicitly, or by its kind. */
+function covers(op, asset) {
+  if (op.scope) return asset.kind === op.scope;
+  return op.assetIds.includes(asset.id);
+}
+
 /** Enabled operations covering one asset, in stack order. */
 export function operationsFor(assetId) {
-  return state.operations.filter((op) => op.enabled && op.assetIds.includes(assetId));
+  const asset = getAsset(assetId);
+  if (!asset) return [];
+  return state.operations.filter((op) => op.enabled && covers(op, asset));
 }

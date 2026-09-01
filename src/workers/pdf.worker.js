@@ -2,7 +2,7 @@
 // runs a batch. Tools return immediately with an acknowledgement; this worker
 // posts progress back and the UI updates as results arrive.
 
-import { PDFDocument, degrees } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
+import { PDFDocument, degrees } from '../../assets/vendor/pdf-lib.mjs';
 
 /**
  * Apply the enabled operation stack to one document, in order.

@@ -48,7 +48,9 @@ with sync_playwright() as pw:
     check("a look over two images is ONE operation",
           p.locator(".op").count() == 1, f"{p.locator('.op').count()} operations")
     summary = p.inner_text(".op-summary")
-    check("the operation says how many files it covers", "2 images" in summary, summary)
+    # The row covers the photographs as a set, not a fixed list, so it must not
+    # name a count that dropping another photo in would make wrong.
+    check("the operation says it covers the whole set", "every photo" in summary, summary)
 
     # And undoing it in one click affects both.
     p.locator(".op input[type=checkbox]").first.uncheck()
@@ -152,6 +154,49 @@ with sync_playwright() as pw:
     p.click("#image-rotate-right"); p.wait_for_timeout(900)
     check("returning to square removes the row entirely", len(rotations()) == 0,
           str(rotations()))
+
+
+    # --- Photos added later inherit the edits already made -------------------
+    # The bug this guards: grade the photographs, drop four more in, and the new
+    # ones arrived ungraded while the stack claimed to cover everything.
+    # Start from a clean stack and a neutral control, so choosing the look below
+    # really fires a change rather than re-selecting what is already set.
+    p.evaluate("""async () => {
+        const { clearOperations } = await import('./src/core/workspace.js');
+        clearOperations();
+    }""")
+    p.select_option("#look-select", "")
+    p.wait_for_timeout(800)
+    # An earlier block left the strength at 30%; a partial grade is not what this
+    # check is about, so put it back to full.
+    p.locator("#look-strength").fill("100")
+    p.wait_for_timeout(500)
+    p.select_option("#look-select", "black-and-white")
+    p.wait_for_timeout(3000)
+    grey = lambda i: p.evaluate(
+        "(i) => { const img=document.querySelectorAll('.image-cell img')[i];"
+        " if(!img) return -1;"
+        " const c=document.createElement('canvas'); c.width=40; c.height=40;"
+        " const x=c.getContext('2d'); x.drawImage(img,0,0,40,40);"
+        " const d=x.getImageData(0,0,40,40).data; let s=0,n=0;"
+        " for(let j=0;j<d.length;j+=4){s+=Math.max(d[j],d[j+1],d[j+2])-Math.min(d[j],d[j+1],d[j+2]);n++;}"
+        " return Math.round(s/n); }", i)
+    graded = grey(0)
+    check("the loaded photographs are graded", graded == 0, str(graded))
+
+    rows_before = p.locator(".op").count()
+    p.set_input_files("#file-input", [f"{S}/rotated.png"])
+    p.wait_for_timeout(3000)
+
+    check("the new photograph joins the bench", p.locator(".image-cell").count() == 3,
+          str(p.locator(".image-cell").count()))
+    last = grey(p.locator(".image-cell").count() - 1)
+    check("a photograph added after the edit arrives graded too", last == 0, str(last))
+    check("and it does not add a second row to the stack",
+          p.locator(".op").count() == rows_before, str(p.locator(".op").count()))
+
+    p.select_option("#look-select", "")
+    p.wait_for_timeout(1500)
 
     check("no errors throughout", not errors, "; ".join(errors[:3]))
     p.screenshot(path=f"{S}/../live-preview.png", full_page=True)

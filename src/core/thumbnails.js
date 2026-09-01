@@ -4,10 +4,10 @@
 // a large document does not lock up the interface. Thumbnails are cached per
 // asset because re-rendering on every state change would be wasteful.
 
-import * as pdfjs from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
+import * as pdfjs from '../../assets/vendor/pdf.min.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc =
-  'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+  new URL('../../assets/vendor/pdf.worker.min.mjs', import.meta.url).href;
 
 const THUMB_WIDTH = 150;
 

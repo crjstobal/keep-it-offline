@@ -4,7 +4,9 @@ A file workbench that runs entirely in your browser. Redact PDFs, grade
 photographs, cut video and speed up audio without uploading anything, and let an
 AI agent operate the same tools without ever seeing the files themselves.
 
-**Live demo:** https://keepitoffline.com
+**Live demo:** _TODO before submitting: paste the deployed URL here._ It must be
+the same URL given on the submission form, served over HTTPS, and opened once in
+Chrome 149+ with the WebMCP flag on to confirm the tools register.
 
 ## The idea
 
@@ -13,8 +15,9 @@ Payslips, contracts, medical records, passports. The file is processed remotely
 and you are asked to trust a privacy policy.
 
 Keep It Offline does the work in the tab. Your file is read into memory, edited
-there, and written back out as a download. Nothing is transmitted. The counter in
-the header shows the bytes uploaded by this app, and it stays at zero.
+there, and written back out as a download. Nothing is transmitted, and the app
+makes no third-party requests at all: see the section below for how to check
+that rather than take it on trust.
 
 WebMCP is what makes the second half possible. An agent can drive the workbench
 through registered tools, but the tools return *facts about* the document, never
@@ -54,6 +57,27 @@ produces a file. A wrong call from the agent costs one click to undo.
 thread, so a batch job would freeze the page. Tools acknowledge immediately and
 hand the work to a Web Worker, which means the user can keep working while an
 agent processes a batch, and both see the same state change live.
+
+## Nothing leaves the tab, and you can check
+
+The claim is easy to make and worth verifying, so the app is built so that a
+reader can confirm it rather than trust it:
+
+- **No third-party requests at all.** pdf.js, pdf-lib and fflate are vendored
+  under `assets/vendor/`, and the typeface under `assets/fonts/`. A page whose
+  promise is that nothing leaves your computer should not open the tab by
+  telling a CDN you are here.
+- **A Content-Security-Policy that enforces it.** `connect-src 'self'` means no
+  `fetch`, XHR, WebSocket or beacon can reach another host, and `form-action
+  'none'` closes the other way out. If a future change ever tried to upload a
+  file, the browser would block it and say so in the console. See `_headers`
+  and `netlify.toml`.
+- **Check it yourself.** Open DevTools, go to the Network tab, and use the app.
+  Every request is to this origin, and after load there are none at all. The
+  test suite asserts the same thing.
+
+Because there is no build step, the source in this repository is exactly what
+runs in the browser.
 
 ## Running locally
 

@@ -250,15 +250,37 @@ async function ingest(file) {
   }
 
   console.warn('[keepitoffline] unsupported file type', file.type, file.name);
+  throw new Error(
+    file.type
+      ? `${file.type} files are not supported here.`
+      : 'That file type is not supported here.',
+  );
 }
 
+/**
+ * Load what was dropped, and say so when something did not load.
+ *
+ * A file that quietly does nothing reads as a broken page. Whatever can be
+ * opened is opened, and the rest is reported once at the end rather than one
+ * alert per file.
+ */
 async function handleFiles(fileList) {
+  const rejected = [];
   for (const file of fileList) {
     try {
       await ingest(file);
     } catch (error) {
       console.error('[keepitoffline] could not load', file.name, error);
+      rejected.push(`${file.name}: ${error.message}`);
     }
+  }
+
+  if (rejected.length > 0) {
+    window.alert(
+      `Could not open ${rejected.length} file${rejected.length === 1 ? '' : 's'}:\n\n` +
+        rejected.join('\n') +
+        '\n\nDocuments (PDF), photos, video and sound can be opened.',
+    );
   }
 }
 
@@ -269,7 +291,13 @@ els.dropzone.addEventListener('keydown', (event) => {
     els.fileInput.click();
   }
 });
-els.fileInput.addEventListener('change', (event) => handleFiles(event.target.files));
+els.fileInput.addEventListener('change', (event) => {
+  const files = [...event.target.files];
+  // Clearing the input is what lets the same file be picked again after it has
+  // been removed: without this the change event never fires a second time.
+  event.target.value = '';
+  handleFiles(files);
+});
 
 /**
  * The whole window accepts a drop.
@@ -425,7 +453,7 @@ async function exportAll() {
     setExportProgress(index + 1, pending.length);
   }
 
-  const { zipSync } = await import('https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm');
+  const { zipSync } = await import('../assets/vendor/fflate.mjs');
   // The zip is built in memory from files that were already in memory: still
   // nothing leaves the browser.
   const zipped = zipSync(files, { level: 6 });

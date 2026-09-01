@@ -20,12 +20,14 @@ let els = {};
 /** Per-track playback and timeline state, keyed by asset id. */
 const tracks = new Map();
 
-const scopeOf = (list) => (list.length === 1 ? list[0].name : `${list.length} tracks`);
+// Whole-track controls cover the tracks as a set, so the row must not freeze a
+// count that a later drop would make wrong.
+const scopeOf = (list) => (list.length === 1 ? list[0].name : 'every track');
 
 function queue(type, params, summary) {
   const list = listAssets('audio');
   if (list.length === 0) return;
-  pushOperation({ type, assetIds: list.map((a) => a.id), params, summary, source: 'user' });
+  pushOperation({ type, scope: 'audio', params, summary, source: 'user' });
 }
 
 export function init(elements) {
@@ -56,7 +58,7 @@ export function init(elements) {
     if (list.length === 0) return;
     speedOpId = pushOperation({
       type: 'change_speed',
-      assetIds: list.map((a) => a.id),
+      scope: 'audio',
       params: { rate },
       summary,
       source: 'user',

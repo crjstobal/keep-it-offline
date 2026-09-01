@@ -100,5 +100,49 @@ check('moving something that is gone reports failure',
       ws.moveAssetToIndex('image_missing', 0) === false);
 for (const a of [a1, a2, a3]) ws.removeAsset(a.id);
 
+
+// --- Kind-scoped operations ------------------------------------------------
+// "Warm up the photographs" is a decision about the photographs, not about the
+// ones that happened to be loaded when the slider moved. Files dropped later
+// must arrive with it already applied.
+const s1 = ws.addAsset({ name: 's1.jpg', kind: 'image', bytes: new ArrayBuffer(1), meta: {} });
+const scoped = ws.pushOperation({
+  type: 'apply_lut', scope: 'image', params: { lut_name: 'warm' },
+  summary: 'Grade every photo', source: 'user',
+});
+check('a scoped op covers the file that was loaded', ws.operationsFor(s1.id).length === 1);
+
+const s2 = ws.addAsset({ name: 's2.jpg', kind: 'image', bytes: new ArrayBuffer(1), meta: {} });
+check('a scoped op covers a file added afterwards', ws.operationsFor(s2.id).length === 1);
+
+const other = ws.addAsset({ name: 'v.mp4', kind: 'video', bytes: new ArrayBuffer(1), meta: {} });
+check('a scoped op does not leak to another kind', ws.operationsFor(other.id).length === 0);
+
+const pinned = ws.pushOperation({
+  type: 'trim_video', assetIds: [other.id], params: { start: 0, end: 1 },
+  summary: 'Trim', source: 'user',
+});
+const s3 = ws.addAsset({ name: 'v2.mp4', kind: 'video', bytes: new ArrayBuffer(1), meta: {} });
+check('a pinned op stays on its own file', ws.operationsFor(s3.id).length === 0);
+
+ws.setOperationEnabled(scoped.id, false);
+check('unticking a scoped op releases every file', ws.operationsFor(s2.id).length === 0);
+ws.setOperationEnabled(scoped.id, true);
+
+// Removing one photo must not take the whole grade with it.
+ws.removeAsset(s1.id);
+check('a scoped op survives one of its files going',
+      ws.getState().operations.some((o) => o.id === scoped.id));
+check('the remaining photo is still covered', ws.operationsFor(s2.id).length === 1);
+
+// When the last photo goes there is nothing left for it to cover.
+ws.removeAsset(s2.id);
+check('a scoped op goes when the last file of its kind goes',
+      !ws.getState().operations.some((o) => o.id === scoped.id));
+check('the pinned video op is untouched by that',
+      ws.getState().operations.some((o) => o.id === pinned.id));
+for (const a of [other, s3]) ws.removeAsset(a.id);
+check('operationsFor is empty for a file that is gone', ws.operationsFor(s1.id).length === 0);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

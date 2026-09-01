@@ -8,6 +8,19 @@ import { listAssets, pushOperation } from '../core/workspace.js';
 
 const hasAudio = (kinds) => kinds.has('audio');
 
+/**
+ * How an operation should be addressed on the stack.
+ *
+ * A call that named no ids meant "all of them", which is a standing decision:
+ * scope it to the kind so files added later arrive with it already applied. A
+ * call that named ids meant those files, and stays pinned to them.
+ */
+function targetOf(fileIds, targets) {
+  return fileIds && fileIds.length > 0
+    ? { assetIds: targets.map((a) => a.id) }
+    : { scope: 'audio' };
+}
+
 function resolveAudio(fileIds) {
   const tracks = listAssets('audio');
   if (tracks.length === 0) throw new Error('No audio is loaded.');
@@ -70,7 +83,7 @@ declareTool({
         file_ids: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Which tracks to change. Omit to apply to all of them.',
+          description: 'Which tracks to change. Omit to cover all of them, now and as more are added.',
         },
       },
       required: ['rate'],
@@ -82,7 +95,7 @@ declareTool({
 
       pushOperation({
         type: 'change_speed',
-        assetIds: targets.map((a) => a.id),
+        ...targetOf(file_ids, targets),
         params: { rate },
         summary: `Play ${scopeOf(targets)} at ${rate}×`,
         source: 'agent',
@@ -101,7 +114,7 @@ declareTool({
     description:
       'Queue a trim, keeping only the section between two times in seconds. ' +
       'Call describe_audio first to find out how long the track is. ' +
-      'Omit file_ids to apply to every loaded track.',
+      'Omit file_ids to make it a standing rule over every loaded track, including ones the user adds later.',
     inputSchema: {
       type: 'object',
       properties: {

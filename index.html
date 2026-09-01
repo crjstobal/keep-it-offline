@@ -9,12 +9,10 @@
       name="description"
       content="Edit PDFs and images in your browser. Files never leave the tab. An AI agent can operate the tools without ever seeing your files."
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- The typeface is served from this origin like everything else. A page
+         whose promise is that nothing leaves your computer cannot open the tab
+         by telling a third party you are here. -->
+    <link rel="stylesheet" href="./assets/fonts/instrument-sans.css" />
     <link rel="stylesheet" href="./src/ui/style.css" />
   </head>
   <body>
