@@ -52,9 +52,11 @@ with sync_playwright() as pw:
     check("PDF tools remain while a PDF is loaded",
           {"describe_pdf", "remove_pages"} <= set(both), str(both))
 
-    # Removing the PDF must deregister its tools via AbortController.
-    p.locator(".asset").first.locator("button").click()
-    p.wait_for_timeout(800)
+    # Removing the PDF must deregister its tools via AbortController. The
+    # control asks first now, so the dialog is accepted.
+    p.on("dialog", lambda d: d.accept())
+    p.locator(".asset").first.locator(".asset-remove").click()
+    p.wait_for_timeout(1200)
     after = tools()
     check("removing the PDF deregisters the PDF tools",
           not {"describe_pdf", "remove_pages", "rotate_pages"} & set(after), str(after))

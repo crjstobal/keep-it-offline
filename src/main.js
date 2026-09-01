@@ -119,21 +119,26 @@ for (const button of document.querySelectorAll('[data-select]')) {
 
 // One control sizes each grid, so a long document can be scanned at a glance or
 // inspected closely without leaving the page.
-const thumbSize = document.getElementById('thumb-size');
-thumbSize.addEventListener('input', () => {
-  els.gridHost.style.setProperty('--thumb-size', `${thumbSize.value}px`);
-});
-els.gridHost.style.setProperty('--thumb-size', `${thumbSize.value}px`);
-
 // Each grid has its own size control, since a contact sheet of photographs and
 // a row of video players want very different defaults.
 for (const [id, apply] of [
+  ['thumb-size', (value) => els.gridHost.style.setProperty('--thumb-size', `${value}px`)],
   ['image-thumb-size', (value) => imagePanel.setThumbSize(value)],
   ['video-thumb-size', (value) => videoPanel.setThumbSize(value)],
 ]) {
   const slider = document.getElementById(id);
-  slider.addEventListener('input', () => apply(Number(slider.value)));
-  apply(Number(slider.value));
+  const readout = document.getElementById(`${id}-value`);
+  const base = Number(slider.value);
+
+  // The readout is relative to where the slider starts, because a percentage of
+  // the default size means something to a person and a pixel width does not.
+  const update = () => {
+    const value = Number(slider.value);
+    apply(value);
+    if (readout) readout.textContent = `${Math.round((value / base) * 100)}%`;
+  };
+  slider.addEventListener('input', update);
+  update();
 }
 
 els.removeSelected.addEventListener('click', () => grid.removeSelected(els.gridHost));
@@ -412,8 +417,6 @@ function describeAsset(asset) {
 }
 
 function renderAssets(state) {
-  els.assetList.replaceChildren();
-
   const busy = state.assets.length > 0;
 
   // The headline and the dropzone have both done their job once there is work
@@ -430,7 +433,11 @@ function renderAssets(state) {
     ? 'Drop more files here any time'
     : 'Drop your files here';
 
+  // Files with no grid of their own still need a way off the bench.
+  els.assetList.replaceChildren();
   for (const asset of state.assets) {
+    if (asset.kind !== 'pdf') continue;
+
     const li = document.createElement('li');
     li.className = `asset asset-${asset.kind}`;
 
@@ -444,17 +451,28 @@ function renderAssets(state) {
     detail.textContent = describeAsset(asset);
     info.append(name, detail);
 
-    const remove = document.createElement('button');
-    remove.className = 'asset-remove';
-    remove.type = 'button';
-    remove.title = `Take ${asset.name} off the bench`;
-    remove.setAttribute('aria-label', `Remove ${asset.name}`);
-    remove.textContent = '×';
-    remove.addEventListener('click', () => removeAsset(asset.id));
-
-    li.append(info, remove);
+    li.append(info, makeRemoveButton(asset));
     els.assetList.append(li);
   }
+}
+
+/** A close button that asks first: removing a file drops its edits with it. */
+export function makeRemoveButton(asset) {
+  const button = document.createElement('button');
+  button.className = 'asset-remove';
+  button.type = 'button';
+  button.title = `Take ${asset.name} off the bench`;
+  button.setAttribute('aria-label', `Remove ${asset.name}`);
+  button.textContent = '×';
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const queued = operationsFor(asset.id).length;
+    const warning = queued
+      ? `Remove ${asset.name}? It has ${queued} change${queued === 1 ? '' : 's'} that will go with it.`
+      : `Remove ${asset.name} from the bench?`;
+    if (window.confirm(warning)) removeAsset(asset.id);
+  });
+  return button;
 }
 
 function renderOperations(state) {

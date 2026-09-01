@@ -64,6 +64,24 @@ export function touch() {
   notify();
 }
 
+/**
+ * Move one file to sit where another one is.
+ *
+ * Order decides what a contact sheet or a combined document looks like, so it
+ * is part of the workspace rather than a detail of how the grid happens to be
+ * drawn.
+ */
+export function moveAsset(draggedId, targetId) {
+  const from = state.assets.findIndex((a) => a.id === draggedId);
+  const to = state.assets.findIndex((a) => a.id === targetId);
+  if (from === -1 || to === -1 || from === to) return false;
+
+  const [moved] = state.assets.splice(from, 1);
+  state.assets.splice(to, 0, moved);
+  notify();
+  return true;
+}
+
 export function getAsset(id) {
   return state.assets.find((a) => a.id === id);
 }

@@ -8,8 +8,10 @@
 import {
   getState,
   listAssets,
+  moveAsset,
   operationsFor,
   pushOperation,
+  removeAsset,
   removeOperation,
   updateOperation,
 } from '../core/workspace.js';
@@ -363,22 +365,28 @@ function buildCell(asset) {
   const cell = document.createElement('div');
   cell.className = 'image-cell';
   cell.dataset.assetId = asset.id;
+  cell.draggable = true;
 
   const frame = document.createElement('div');
   frame.className = 'image-frame';
 
   const img = document.createElement('img');
   img.alt = asset.name;
+  img.draggable = false;
   frame.append(img);
 
-  // Images get the same enlarged view as PDF pages, for the same reason: you
-  // cannot judge a colour grade from a thumbnail.
+  // The controls sit on the picture they act on, rather than in a list of
+  // chips repeating what the grid already shows.
+  const actions = document.createElement('div');
+  actions.className = 'cell-actions';
+
   const zoom = document.createElement('button');
-  zoom.className = 'page-zoom';
-  zoom.title = `Enlarge ${asset.name}`;
-  zoom.setAttribute('aria-label', `Enlarge ${asset.name}`);
+  zoom.className = 'cell-button';
+  zoom.type = 'button';
+  zoom.title = `View ${asset.name}`;
+  zoom.setAttribute('aria-label', `View ${asset.name}`);
   zoom.innerHTML =
-    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" ' +
+    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
     'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/>' +
     '<path d="M10.5 7.5 v6 M7.5 10.5 h6"/></svg>';
@@ -387,20 +395,80 @@ function buildCell(asset) {
     openImageViewer(asset);
   });
 
+  const remove = document.createElement('button');
+  remove.className = 'cell-button cell-remove';
+  remove.type = 'button';
+  remove.title = `Remove ${asset.name}`;
+  remove.setAttribute('aria-label', `Remove ${asset.name}`);
+  remove.textContent = '×';
+  remove.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const queued = operationsFor(asset.id).length;
+    const warning = queued
+      ? `Remove ${asset.name}? It has ${queued} change${queued === 1 ? '' : 's'} that will go with it.`
+      : `Remove ${asset.name} from the bench?`;
+    if (window.confirm(warning)) removeAsset(asset.id);
+  });
+
+  actions.append(zoom, remove);
+
   const name = document.createElement('span');
   name.className = 'image-name';
   name.textContent = asset.name;
 
-  cell.append(frame, zoom, name);
+  cell.append(frame, actions, name);
+  attachReordering(cell, asset);
   return cell;
+}
+
+/**
+ * Drag a photograph to move it.
+ *
+ * Order is not cosmetic: it decides what a contact sheet or a PDF built from
+ * these would look like, so it belongs under the pointer rather than in a
+ * setting somewhere.
+ */
+function attachReordering(cell, asset) {
+  cell.addEventListener('dragstart', (event) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', asset.id);
+    cell.classList.add('is-dragging');
+  });
+
+  cell.addEventListener('dragend', () => {
+    cell.classList.remove('is-dragging');
+    for (const other of els.grid.querySelectorAll('.image-cell')) {
+      other.classList.remove('is-drop-target');
+    }
+  });
+
+  cell.addEventListener('dragover', (event) => {
+    // Only accept a photograph being moved, never a file dropped from outside.
+    if (!event.dataTransfer.types.includes('text/plain')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    cell.classList.add('is-drop-target');
+  });
+
+  cell.addEventListener('dragleave', () => cell.classList.remove('is-drop-target'));
+
+  cell.addEventListener('drop', (event) => {
+    const draggedId = event.dataTransfer.getData('text/plain');
+    cell.classList.remove('is-drop-target');
+    if (!draggedId || draggedId === asset.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    moveAsset(draggedId, asset.id);
+  });
 }
 
 function openImageViewer(asset) {
   const images = listAssets('image');
   openViewer({
-    index: images.findIndex((a) => a.id === asset.id),
+    index: Math.max(0, images.findIndex((a) => a.id === asset.id)),
     total: images.length,
-    caption: (i) => images[i]?.name ?? '',
+    caption: (i) => `${images[i]?.name ?? ''}  ·  ${i + 1} of ${images.length}`,
+    placeholder: (i) => fullUrls.get(images[i]?.id) ?? '',
     resolve: async (i) => fullUrls.get(images[i]?.id) ?? '',
   });
 }

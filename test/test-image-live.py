@@ -60,11 +60,13 @@ with sync_playwright() as pw:
 
     # Images get the enlarged viewer too.
     p.locator(".image-cell").first.hover()
-    p.locator(".image-cell").first.locator(".page-zoom").click()
+    p.locator(".image-cell").first.locator(".cell-button").first.click()
     p.wait_for_timeout(800)
     check("images open in the enlarged viewer", p.locator(".viewer:not([hidden])").count() == 1)
     check("viewer captions the image by name", "bars.png" in p.inner_text(".viewer-caption"),
           p.inner_text(".viewer-caption"))
+    check("the caption says where you are in the set",
+          "1 of 2" in p.inner_text(".viewer-caption"), p.inner_text(".viewer-caption"))
     p.keyboard.press("ArrowRight")
     p.wait_for_timeout(500)
     check("arrow keys move between images", "gradient.png" in p.inner_text(".viewer-caption"),
@@ -89,6 +91,23 @@ with sync_playwright() as pw:
     pw_after = p.evaluate("() => document.querySelector('.page-cell')?.getBoundingClientRect().width ?? 0")
     check("the page size slider enlarges PDF thumbnails", pw_after > pw_before,
           f"{round(pw_before)} -> {round(pw_after)}")
+
+    # Each photograph carries its own controls, so nothing about it is repeated
+    # in a list above the grid. A PDF still gets a row, since it has no grid of
+    # its own to hang controls on.
+    check("photographs are not also listed above the grid",
+          p.locator(".asset-image").count() == 0,
+          f"{p.locator('.asset-image').count()} image chips")
+    check("every cell has a view and a remove control",
+          p.locator(".cell-button").count() == p.locator(".image-cell").count() * 2)
+
+    # Dragging one photograph onto another moves it.
+    order = lambda: p.evaluate("() => [...document.querySelectorAll('.image-name')].map(e=>e.textContent)")
+    before_order = order()
+    p.locator(".image-cell").nth(1).drag_to(p.locator(".image-cell").nth(0))
+    p.wait_for_timeout(2500)
+    check("dragging a photograph reorders the bench", order() != before_order,
+          f"{before_order} -> {order()}")
 
     check("no errors throughout", not errors, "; ".join(errors[:3]))
     p.screenshot(path=f"{S}/../live-preview.png", full_page=True)

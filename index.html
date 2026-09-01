@@ -32,8 +32,8 @@
         <h1>Keep It Offline</h1>
       </div>
       <div class="promise" title="This is literal: the app makes no upload requests at all.">
-        <span class="promise-label">Nothing has left this tab</span>
-        <span class="promise-value" id="bytes-uploaded">0 bytes</span>
+        <span class="promise-label">Nothing is uploaded. It all happens on your computer.</span>
+        <span class="promise-value" id="bytes-uploaded">0 bytes sent</span>
       </div>
       <div class="agent-status" id="agent-status" hidden>
         <span class="agent-dot" aria-hidden="true"></span>
@@ -116,11 +116,16 @@
             <button class="danger" id="remove-selected" disabled>Remove selected</button>
           </div>
           <div class="worktools">
-            <span class="zoom-control">
-              <span class="zoom-icon" aria-hidden="true">◻</span>
+            <label class="zoom-control" title="Page size">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/>
+                <path d="M7.5 10.5 h6"/>
+              </svg>
               <input type="range" id="thumb-size" min="70" max="560" value="130"
                      aria-label="Page size" />
-            </span>
+              <output id="thumb-size-value">100%</output>
+            </label>
           </div>
           <div id="page-grid-host"></div>
         </div>
@@ -246,11 +251,16 @@
             <span class="sep" aria-hidden="true"></span>
           </div>
           <div class="worktools">
-            <span class="zoom-control">
-              <span class="zoom-icon" aria-hidden="true">◻</span>
+            <label class="zoom-control" title="Photo size">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/>
+                <path d="M7.5 10.5 h6"/>
+              </svg>
               <input type="range" id="image-thumb-size" min="140" max="560" value="260"
                      aria-label="Photo size" />
-            </span>
+              <output id="image-thumb-size-value">100%</output>
+            </label>
           </div>
           <div class="image-grid" id="image-grid"></div>
         </div>
@@ -281,11 +291,16 @@
             <span class="sep" aria-hidden="true"></span>
           </div>
           <div class="worktools">
-            <span class="zoom-control">
-              <span class="zoom-icon" aria-hidden="true">◻</span>
+            <label class="zoom-control" title="Video size">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/>
+                <path d="M7.5 10.5 h6"/>
+              </svg>
               <input type="range" id="video-thumb-size" min="240" max="900" value="460"
                      aria-label="Video size" />
-            </span>
+              <output id="video-thumb-size-value">100%</output>
+            </label>
           </div>
           <div class="video-grid" id="video-grid"></div>
         </div>

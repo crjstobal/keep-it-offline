@@ -21,9 +21,13 @@ with sync_playwright() as pw:
     p.set_input_files("#file-input", f"{S}/bars.png")
     p.wait_for_timeout(1200)
 
-    check("image loaded onto the bench", p.locator(".asset").count() == 1)
-    detail = p.inner_text(".asset-detail")
-    check("dimensions read correctly", "400×300" in detail, detail)
+    check("image loaded onto the bench", p.locator(".image-cell").count() == 1)
+    meta = p.evaluate("""async () => {
+        const { getState } = await import('./src/core/workspace.js');
+        const a = getState().assets[0];
+        return `${a.meta.width}x${a.meta.height}`;
+    }""")
+    check("dimensions read correctly", meta == "400x300", meta)
     check("no errors on image load", not errors, "; ".join(errors[:3]))
 
     # Drive the worker directly, the way the tools do, and inspect the output.
