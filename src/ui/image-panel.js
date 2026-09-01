@@ -226,12 +226,42 @@ export function init(elements) {
     pushOperation({ type, assetIds: images.map((a) => a.id), params, summary, source: 'user' });
   };
 
-  els.rotateLeft.addEventListener('click', () =>
-    queueForAll('rotate_image', { degrees: 270 }, `Rotate ${scopeOfImages()} by 270°`),
-  );
-  els.rotateRight.addEventListener('click', () =>
-    queueForAll('rotate_image', { degrees: 90 }, `Rotate ${scopeOfImages()} by 90°`),
-  );
+  /**
+   * Rotation folds into one row rather than stacking.
+   *
+   * Pressing left twice is a half turn, not two changes to undo separately, and
+   * left then right is no rotation at all. Stacking them made the record of
+   * what happened longer than what actually happened.
+   */
+  let rotationOpId = null;
+  const turn = (delta) => {
+    const existing = getState().operations.find((op) => op.id === rotationOpId);
+    const total = (((existing?.params.degrees ?? 0) + delta) % 360 + 360) % 360;
+
+    if (total === 0) {
+      if (existing) removeOperation(existing.id);
+      rotationOpId = null;
+      return;
+    }
+
+    const summary = `Rotate ${scopeOfImages()} by ${total}°`;
+    if (existing) {
+      updateOperation(existing.id, { params: { degrees: total }, summary });
+      return;
+    }
+    const images = listAssets('image');
+    if (images.length === 0) return;
+    rotationOpId = pushOperation({
+      type: 'rotate_image',
+      assetIds: images.map((a) => a.id),
+      params: { degrees: total },
+      summary,
+      source: 'user',
+    }).id;
+  };
+
+  els.rotateLeft.addEventListener('click', () => turn(-90));
+  els.rotateRight.addEventListener('click', () => turn(90));
   els.orientation.addEventListener('change', () => {
     const orientation = els.orientation.value;
     if (!orientation) return;

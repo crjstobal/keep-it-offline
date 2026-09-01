@@ -109,6 +109,34 @@ with sync_playwright() as pw:
     check("dragging a photograph reorders the bench", order() != before_order,
           f"{before_order} -> {order()}")
 
+    # Rotation folds rather than stacking: two lefts are a half turn, and a left
+    # then a right is no rotation at all.
+    p.evaluate("""async () => {
+        const { clearOperations } = await import('./src/core/workspace.js');
+        clearOperations();
+    }""")
+    p.wait_for_timeout(500)
+
+    rotations = lambda: [t for t in p.evaluate(
+        "() => [...document.querySelectorAll('.op-summary')].map(e=>e.textContent)")
+        if "Rotate" in t]
+
+    p.click("#image-rotate-left"); p.wait_for_timeout(900)
+    check("one turn queues one rotation", len(rotations()) == 1, str(rotations()))
+
+    p.click("#image-rotate-left"); p.wait_for_timeout(900)
+    check("two turns stay one row", len(rotations()) == 1, str(rotations()))
+    check("and add up to a half turn", "180" in (rotations()[0] if rotations() else ""),
+          str(rotations()))
+
+    p.click("#image-rotate-right"); p.wait_for_timeout(900)
+    check("turning back subtracts", "270" in (rotations()[0] if rotations() else ""),
+          str(rotations()))
+
+    p.click("#image-rotate-right"); p.wait_for_timeout(900)
+    check("returning to square removes the row entirely", len(rotations()) == 0,
+          str(rotations()))
+
     check("no errors throughout", not errors, "; ".join(errors[:3]))
     p.screenshot(path=f"{S}/../live-preview.png", full_page=True)
     b.close()
