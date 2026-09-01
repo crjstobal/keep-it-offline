@@ -49,22 +49,28 @@ async function register(name) {
   if (!entry) return;
 
   const controller = new AbortController();
-  // Registration goes through modelContext, which resolves to
-  // document.modelContext on current Chrome builds:
-  //
-  //   document.modelContext.registerTool({ name, description, inputSchema, execute })
-  //
-  // The navigator fallback only exists for builds still on the origin trial.
-  await modelContext.registerTool(
-    {
-      name: entry.definition.name,
-      description: entry.definition.description,
-      inputSchema: entry.definition.inputSchema,
-      annotations: entry.definition.annotations,
-      execute: entry.definition.execute,
-    },
-    { signal: controller.signal },
-  );
+  const { description, inputSchema, annotations, execute } = entry.definition;
+
+  if (document.modelContext) {
+    await document.modelContext.registerTool({
+      name,
+      description,
+      inputSchema,
+      annotations,
+      execute,
+    }, { signal: controller.signal });
+  } else {
+    // Builds still on the origin trial expose the API on navigator instead.
+    // The call above is the current one; this is only a fallback.
+    await navigator.modelContext.registerTool({
+      name,
+      description,
+      inputSchema,
+      annotations,
+      execute,
+    }, { signal: controller.signal });
+  }
+
   active.set(name, { definition: entry.definition, controller });
 }
 
