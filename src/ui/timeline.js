@@ -57,9 +57,23 @@ export function createTimeline({ container, duration, peaks, onChange, onScrub }
     return Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
   }
 
+  /** Canvas cannot read CSS variables, so the palette is fetched once per draw. */
+  function palette() {
+    const style = getComputedStyle(container);
+    const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
+    return {
+      inRange: read('--accent', '#f26a2e'),
+      outOfRange: read('--line', '#e6e0d4'),
+      track: read('--panel-2', '#faf7f1'),
+      ticks: read('--muted', '#8d887c'),
+    };
+  }
+
   function draw() {
     const rect = container.getBoundingClientRect();
     if (rect.width === 0) return;
+
+    const colours = palette();
 
     const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr;
@@ -85,17 +99,17 @@ export function createTimeline({ container, duration, peaks, onChange, onScrub }
         const time = ratioToTime(x / rect.width);
         const inRange = time >= start && time <= end;
         const barHeight = Math.max(1, peak * rect.height * 0.86);
-        context.fillStyle = inRange ? '#4ade80' : '#2a2f3a';
+        context.fillStyle = inRange ? colours.inRange : colours.outOfRange;
         context.fillRect(x, (rect.height - barHeight) / 2, Math.max(1, barWidth - 0.5), barHeight);
       }
     } else {
       // No waveform (video): a plain track still shows the selection.
-      context.fillStyle = '#1e222b';
+      context.fillStyle = colours.track;
       context.fillRect(0, 0, rect.width, rect.height);
     }
 
     // Second markers, as many as fit without crowding.
-    context.fillStyle = '#6b7280';
+    context.fillStyle = colours.ticks;
     context.font = '10px ui-monospace, monospace';
     const step = niceStep(viewSpan(), rect.width);
     for (let t = Math.ceil(viewStart / step) * step; t <= viewEnd; t += step) {

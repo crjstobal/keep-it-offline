@@ -427,6 +427,14 @@ function describeAsset(asset) {
 function renderAssets(state) {
   els.assetList.replaceChildren();
 
+  // The headline has done its job once there is something on the bench.
+  const lede = document.getElementById('lede');
+  if (lede) {
+    lede.classList.toggle('is-compact', state.assets.length > 0);
+    if (state.assets.length > 0) lede.querySelector('.lede-title').textContent = 'Your files';
+    else lede.querySelector('.lede-title').textContent = 'Your files stay on your computer.';
+  }
+
   // With a batch of photographs the file list is not the interesting part of
   // the page: one line per file would push the previews off the screen
   // entirely. Past a handful, collapse to a summary that can be opened.

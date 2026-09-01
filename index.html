@@ -3,22 +3,32 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f3ec" />
     <title>Keep It Offline — a file workbench that never uploads</title>
     <meta
       name="description"
       content="Edit PDFs and images in your browser. Files never leave the tab. An AI agent can operate the tools without ever seeing your files."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
     />
     <link rel="stylesheet" href="./src/ui/style.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="dot" aria-hidden="true"></span>
+        <span class="toolbox" aria-hidden="true">
+          <span class="toolbox-handle"></span>
+          <span class="toolbox-body"></span>
+        </span>
         <h1>Keep It Offline</h1>
       </div>
-      <div class="promise" title="This counter is real: the app makes no upload requests.">
-        <span class="promise-label">Bytes uploaded</span>
-        <span class="promise-value" id="bytes-uploaded">0</span>
+      <div class="promise" title="This is literal: the app makes no upload requests at all.">
+        <span class="promise-label">Nothing has left this tab</span>
+        <span class="promise-value" id="bytes-uploaded">0 bytes</span>
       </div>
       <div class="agent-status" id="agent-status" hidden>
         <span class="agent-dot" aria-hidden="true"></span>
@@ -28,30 +38,55 @@
 
     <main>
       <section class="bench" aria-labelledby="bench-heading">
-        <h2 id="bench-heading">Your files</h2>
+        <div class="lede" id="lede">
+          <h2 id="bench-heading" class="lede-title">Your files stay on your computer.</h2>
+          <p class="lede-sub">Everything happens right here in this window. There is nowhere
+            for your files to be sent, so they are never sent.</p>
+        </div>
 
         <div class="dropzone" id="dropzone" tabindex="0" role="button"
              aria-label="Add files. Nothing is uploaded.">
+          
+          <p class="dropzone-main">Drop your files here</p>
+          <p class="dropzone-sub">or pick what you would like to work on</p>
           <div class="dropzone-icons" aria-hidden="true">
-            <span class="kind"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-              <path d="M14 2v5h5"/></svg><b>PDF</b></span>
-            <span class="kind"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L7 20"/></svg><b>Images</b></span>
-            <span class="kind"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m16 10 4.5-2.6a1 1 0 0 1 1.5.9v7.4a1 1 0 0 1-1.5.9L16 14"/>
-              <rect x="2" y="6" width="14" height="12" rx="2"/></svg><b>Video</b></span>
-            <span class="kind"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/>
-              <circle cx="18" cy="16" r="3"/></svg><b>Audio</b></span>
+            <span class="kind kind-pdf">
+              <span class="kind-tile">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                  <path d="M14 2v5h5"/><path d="M8 13h6M8 17h4"/></svg>
+              </span>
+              <b>Documents</b><small>PDFs and scans</small>
+            </span>
+            <span class="kind kind-image">
+              <span class="kind-tile">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="3"/>
+                  <circle cx="9" cy="9" r="1.8"/><path d="m21 15-4.5-4.5L7 20"/></svg>
+              </span>
+              <b>Photos</b><small>From a phone or camera</small>
+            </span>
+            <span class="kind kind-video">
+              <span class="kind-tile">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m16 10 4.5-2.6a1 1 0 0 1 1.5.9v7.4a1 1 0 0 1-1.5.9L16 14"/>
+                  <rect x="2" y="6" width="14" height="12" rx="3"/></svg>
+              </span>
+              <b>Video</b><small>Clips and recordings</small>
+            </span>
+            <span class="kind kind-audio">
+              <span class="kind-tile">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/>
+                  <circle cx="18" cy="16" r="3"/></svg>
+              </span>
+              <b>Sound</b><small>Music and voice</small>
+            </span>
           </div>
-          <p class="dropzone-main">Drop files here</p>
-          <p class="dropzone-sub">They stay on this device. Nothing is uploaded.</p>
           <input type="file" id="file-input" multiple accept="application/pdf,image/*,video/*,audio/*" hidden />
         </div>
 
@@ -261,22 +296,22 @@
 
       <aside class="side">
         <section class="stack" aria-labelledby="stack-heading">
-          <h2 id="stack-heading">Operation stack</h2>
+          <h2 id="stack-heading">Changes so far</h2>
           <p class="hint">
-            Nothing is destructive until you export. Uncheck any step to undo it, whether you
-            or the agent added it.
+            Nothing is written until you export. Untick any step to put it back the way it
+            was, whether you or the agent added it.
           </p>
           <ul class="op-list" id="op-list">
-            <li class="empty">No operations queued.</li>
+            <li class="empty">No changes yet.</li>
           </ul>
-          <button class="primary" id="export-btn" disabled>Apply and download</button>
+          <button class="primary" id="export-btn" disabled>Save a copy</button>
         </section>
 
         <section class="tools-panel" aria-labelledby="tools-heading">
-          <h2 id="tools-heading">Tools exposed to the agent</h2>
+          <h2 id="tools-heading">What the agent can do right now</h2>
           <p class="hint" id="tools-hint">
-            Tools are registered based on what is on the bench, so the agent only ever sees
-            what makes sense right now.
+            This list changes with the files you have open. The agent can use these, but it
+            never sees what is inside your files.
           </p>
           <ul class="tool-list" id="tool-list"></ul>
         </section>
