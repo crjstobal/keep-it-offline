@@ -16,6 +16,18 @@ const SETS = [
     files: [{ path: 'sample-report.pdf', type: 'application/pdf' }],
   },
   {
+    // Two halves of one document that arrived separately, which is the usual
+    // reason anybody merges anything: clean both, then join them.
+    id: 'pdf-pair',
+    label: 'A report in two parts',
+    detail: 'The report plus its signed addendum, both needing a tidy before joining',
+    icon: fileIcon,
+    files: [
+      { path: 'sample-report.pdf', type: 'application/pdf' },
+      { path: 'sample-addendum.pdf', type: 'application/pdf' },
+    ],
+  },
+  {
     id: 'photos',
     label: 'Photographs',
     detail: '4 shots, mixed orientations, one turned the wrong way',

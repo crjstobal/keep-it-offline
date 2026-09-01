@@ -144,7 +144,8 @@ sounds higher, because that is what a browser can do without a time-stretching
 library; the tool says so rather than pretending otherwise.
 
 Because tools are registered per file kind, none of this crowds the others: a
-PDF registers eight tools, images twelve, video eight, audio six.
+a PDF adds eight tools, images eleven, video six, audio four, on top of the two
+that are always there.
 
 ## Regenerating the LUTs
 
