@@ -473,19 +473,39 @@ function attachReordering(cell, asset) {
   cell.addEventListener('dragend', clearDropMarkers);
 }
 
-/** Which gap the pointer is nearest, and where to draw the line. */
+/**
+ * Which gap the pointer is nearest, and where to draw the line.
+ *
+ * The gaps run along whichever axis the grid is laid out on. At a large zoom a
+ * grid can be a single column, where every cell shares the same left and right
+ * edge: comparing horizontally there finds nothing, so the axis is chosen from
+ * how the cells actually sit.
+ */
 function gapUnderPointer(event) {
   const cells = [...els.grid.querySelectorAll('.image-cell:not(.is-dragging)')];
   if (cells.length === 0) return null;
 
+  const boxes = cells.map((cell) => cell.getBoundingClientRect());
+
+  // Read the layout from every cell, including the one being dragged: with two
+  // photographs, excluding it leaves a single box that can never show whether
+  // the grid is one column or two.
+  const all = [...els.grid.querySelectorAll('.image-cell')].map((c) => c.getBoundingClientRect());
+  const stacked = all.length > 1 && all.every((box) => Math.abs(box.left - all[0].left) < 1);
+
   let best = null;
   for (const [index, cell] of cells.entries()) {
-    const box = cell.getBoundingClientRect();
-    // Compare against both edges, so the last position in a row is reachable.
-    for (const [edge, x] of [['before', box.left], ['after', box.right]]) {
-      const distance = Math.hypot(x - event.clientX, box.top + box.height / 2 - event.clientY);
+    const box = boxes[index];
+    const edges = stacked
+      ? [['before', box.left + box.width / 2, box.top],
+         ['after', box.left + box.width / 2, box.bottom]]
+      : [['before', box.left, box.top + box.height / 2],
+         ['after', box.right, box.top + box.height / 2]];
+
+    for (const [edge, x, y] of edges) {
+      const distance = Math.hypot(x - event.clientX, y - event.clientY);
       if (!best || distance < best.distance) {
-        best = { distance, cell, edge, index: edge === 'before' ? index : index + 1 };
+        best = { distance, cell, edge, stacked, index: edge === 'before' ? index : index + 1 };
       }
     }
   }
@@ -494,7 +514,7 @@ function gapUnderPointer(event) {
 
 function clearDropMarkers() {
   for (const cell of els.grid.querySelectorAll('.image-cell')) {
-    cell.classList.remove('is-dragging', 'drop-before', 'drop-after');
+    cell.classList.remove('is-dragging', 'drop-before', 'drop-after', 'is-stacked');
   }
 }
 
@@ -512,7 +532,10 @@ function attachGridReordering() {
     for (const cell of els.grid.querySelectorAll('.image-cell')) {
       cell.classList.remove('drop-before', 'drop-after');
     }
-    if (gap) gap.cell.classList.add(gap.edge === 'before' ? 'drop-before' : 'drop-after');
+    if (gap) {
+      gap.cell.classList.toggle('is-stacked', gap.stacked);
+      gap.cell.classList.add(gap.edge === 'before' ? 'drop-before' : 'drop-after');
+    }
   });
 
   els.grid.addEventListener('dragleave', (event) => {

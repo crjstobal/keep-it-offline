@@ -50,10 +50,13 @@
       </aside>
 
       <section class="bench" aria-labelledby="bench-heading">
-        <div class="lede" id="lede">
-          <h2 id="bench-heading" class="lede-title">Your files stay on your computer.</h2>
-          <p class="lede-sub">Everything happens right here in this window. There is nowhere
-            for your files to be sent, so they are never sent.</p>
+        <div class="bench-head">
+          <div class="lede" id="lede">
+            <h2 id="bench-heading" class="lede-title">Your files stay on your computer.</h2>
+            <p class="lede-sub">Everything happens right here in this window. There is nowhere
+              for your files to be sent, so they are never sent.</p>
+          </div>
+          <div class="bench-zoom" id="bench-zoom"></div>
         </div>
 
         <div class="dropzone" id="dropzone" tabindex="0" role="button"
@@ -340,6 +343,18 @@
         </section>
       </aside>
     </main>
+
+    <footer class="site-footer">
+      <p class="footer-line">
+        <strong>Keep It Offline</strong> — a file workbench that never uploads. Built for the
+        <a href="https://webmcp.devpost.com" target="_blank" rel="noopener">WebMCP Challenge</a>,
+        which asked what becomes possible when a web page can offer tools to an agent.
+      </p>
+      <p class="footer-line footer-meta">
+        © 2026 Javier Cristobal · <a href="./LICENSE">MIT licensed</a> ·
+        Your files are never sent anywhere, by anyone, for any reason.
+      </p>
+    </footer>
 
     <script type="module" src="./src/main.js"></script>
   </body>

@@ -101,10 +101,26 @@ with sync_playwright() as pw:
     check("every cell has a view and a remove control",
           p.locator(".cell-button").count() == p.locator(".image-cell").count() * 2)
 
-    # Dragging one photograph onto another moves it.
+    # Dragging one photograph into the gap before another moves it.
+    #
+    # The zoom is turned down first so the grid is more than one column wide.
+    # That is the normal case, and it is the one a synthetic drag can drive:
+    # Playwright's drag_to needs a target with room around it, and a single
+    # column leaves no horizontal gap to aim at.
+    p.evaluate("""async () => {
+        const { clearOperations } = await import('./src/core/workspace.js');
+        clearOperations();
+    }""")
+    p.locator("#image-thumb-size").fill("140")
+    p.wait_for_timeout(2500)
+
     order = lambda: p.evaluate("() => [...document.querySelectorAll('.image-name')].map(e=>e.textContent)")
     before_order = order()
-    p.locator(".image-cell").nth(1).drag_to(p.locator(".image-cell").nth(0))
+    target = p.locator(".image-cell").nth(0).bounding_box()
+    p.locator(".image-cell").nth(1).drag_to(
+        p.locator(".image-cell").nth(0),
+        target_position={"x": 3, "y": target["height"] / 2},
+    )
     p.wait_for_timeout(2500)
     check("dragging a photograph reorders the bench", order() != before_order,
           f"{before_order} -> {order()}")

@@ -503,6 +503,32 @@ function renderAssets(state) {
       : 'Your files stay on your computer.';
   }
   document.getElementById('start-over').hidden = !busy;
+
+  // The zoom for whichever grid is on screen sits beside the heading, so the
+  // three columns start on the same line. Which one that is follows the same
+  // order the editors appear in.
+  const zoomSlot = document.getElementById('bench-zoom');
+  const kinds = new Set(state.assets.map((a) => a.kind));
+  const editorId = kinds.has('pdf')
+    ? 'editor'
+    : kinds.has('image')
+      ? 'image-editor'
+      : kinds.has('video')
+        ? 'video-editor'
+        : null;
+
+  const wanted = editorId
+    ? document.querySelector(`#${editorId} .worktools`) ??
+      [...zoomSlot.children].find((el) => el.dataset.editor === editorId)
+    : null;
+
+  if (wanted) {
+    wanted.dataset.editor = editorId;
+    if (wanted.parentElement !== zoomSlot) zoomSlot.append(wanted);
+    // Only the one that belongs to the visible grid is shown.
+    for (const child of zoomSlot.children) child.hidden = child !== wanted;
+  }
+  zoomSlot.hidden = !wanted;
   // With the whole window taking drops, the strip is only needed while the
   // bench is empty and there is nothing else to aim at.
   els.dropzone.hidden = busy;

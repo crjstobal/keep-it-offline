@@ -1549,3 +1549,59 @@ body.is-file-dragging::after {
   border-radius: 999px;
 }
 .asset-action button:hover { background: var(--accent); color: #fff; }
+
+/* --- Bench heading ------------------------------------------------------- */
+/* The heading and the zoom share a line, so all three columns start level. */
+
+.bench-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 34px;
+  margin-bottom: 12px;
+}
+.bench-head .lede { margin: 0; }
+.bench-zoom[hidden] { display: none; }
+.bench-zoom .worktools { margin: 0; }
+
+/* Centred while the bench is empty, since there is nothing else to align to. */
+.bench-head:has(.lede:not(.is-compact)) {
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+/* --- Footer -------------------------------------------------------------- */
+
+.site-footer {
+  max-width: 760px;
+  margin: 56px auto 40px;
+  padding: 26px 24px 0;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+.footer-line {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+.footer-line strong { color: var(--text); font-weight: 600; }
+.footer-meta { font-size: 12.5px; color: var(--muted); }
+.site-footer a { color: var(--accent-deep); text-decoration: underline; text-underline-offset: 3px; }
+.site-footer a:hover { color: var(--accent); }
+
+/* In a single column the gaps run vertically, so the marker does too. */
+.image-cell.is-stacked.drop-before::before,
+.image-cell.is-stacked.drop-after::after {
+  top: auto;
+  bottom: auto;
+  left: 6px;
+  right: 6px;
+  width: auto;
+  height: 3px;
+}
+.image-cell.is-stacked.drop-before::before { top: -8px; }
+.image-cell.is-stacked.drop-after::after { bottom: -8px; }
