@@ -31,10 +31,9 @@ with sync_playwright() as pw:
 
     # Apply a look by hand and confirm the preview actually changes.
     p.select_option("#look-select", "black-and-white")
-    p.click("#apply-look")
-    p.wait_for_timeout(2000)
+    p.wait_for_timeout(2500)
 
-    check("look queues an operation", p.locator(".op").count() == 1)
+    check("choosing a look queues an operation with no Apply step", p.locator(".op").count() == 1)
     check("operation is tagged as the user's", p.locator(".badge-user").count() == 1)
     after = p.evaluate("() => document.querySelector('.image-cell img')?.src ?? ''")
     check("preview updates after applying a look", after != before, f"{before[:30]} -> {after[:30]}")
@@ -50,13 +49,11 @@ with sync_playwright() as pw:
 
     # Strength slider.
     p.fill("#resize-width", "200")
-    p.click("#apply-resize")
-    p.wait_for_timeout(1500)
+    p.wait_for_timeout(2000)
     check("resize queues a second operation", p.locator(".op").count() == 2)
 
     p.select_option("#format-select", "webp")
-    p.click("#apply-format")
-    p.wait_for_timeout(1500)
+    p.wait_for_timeout(2000)
     check("convert queues a third operation", p.locator(".op").count() == 3)
     check("export button is enabled with a full stack",
           not p.locator("#export-btn").is_disabled())

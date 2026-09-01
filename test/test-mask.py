@@ -89,13 +89,26 @@ with sync_playwright() as pw:
 
     # And the controls exist and queue one operation.
     p.select_option("#mask-shape", "blob")
-    p.wait_for_timeout(2000)
-    check("choosing a shape enables Apply", not p.locator("#apply-mask").is_disabled())
-    check("a blob offers a reshuffle", p.locator("#reshuffle-blob").is_visible())
-    p.click("#apply-mask")
-    p.wait_for_timeout(800)
-    check("applying a mask queues one operation", p.locator(".op").count() == 1,
+    p.wait_for_timeout(2500)
+    check("choosing a shape queues it straight away", p.locator(".op").count() == 1,
           f"{p.locator('.op').count()} ops")
+    check("a blob offers a reshuffle", p.locator("#reshuffle-blob").is_visible())
+
+    # Dragging the size must rewrite that row, not add more.
+    p.locator("#mask-size").fill("30")
+    p.wait_for_timeout(1500)
+    p.locator("#mask-size").fill("45")
+    p.wait_for_timeout(1800)
+    check("resizing a mask keeps it to one row", p.locator(".op").count() == 1,
+          f"{p.locator('.op').count()} ops")
+
+    # And setting the shape back to none takes the row away.
+    p.select_option("#mask-shape", "")
+    p.wait_for_timeout(1800)
+    check("clearing the shape removes the change", p.locator(".op").count() == 0,
+          f"{p.locator('.op').count()} ops")
+    p.select_option("#mask-shape", "circle")
+    p.wait_for_timeout(1800)
 
     # A preview that overflows its frame is clipped, and a centred mask then
     # looks off-centre. Every shape of photograph has to letterbox, not crop.

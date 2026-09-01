@@ -5,7 +5,12 @@
 // poster frame alone could not: it would still be the ungraded original, which
 // looked exactly like the grade being broken.
 
-import { listAssets, operationsFor, pushOperation } from '../core/workspace.js';
+import {
+  listAssets,
+  operationsFor,
+  pushOperation,
+  removeOperation,
+} from '../core/workspace.js';
 import { availableLuts, ensureLutLoaded, lutFor } from '../core/luts.js';
 import { applyLutToPixels } from '../core/lut-math.js';
 import { plan } from '../core/video.js';
@@ -15,9 +20,6 @@ let els = {};
 
 /** Per-clip playback state, keyed by asset id. */
 const clips = new Map();
-
-/** The look the controls propose but have not committed. */
-let draftLook = '';
 
 const scopeOf = (list) => (list.length === 1 ? list[0].name : `${list.length} videos`);
 
@@ -42,22 +44,28 @@ export function init(elements) {
     els.look.append(option);
   }
 
-  // Choosing a look previews it immediately, as it does for stills.
+  // Choosing a look is the decision, so it goes onto the stack at once and the
+  // preview follows from there. Setting it back to none takes the row away.
+  let lookOpId = null;
   els.look.addEventListener('change', async () => {
-    draftLook = els.look.value;
-    if (draftLook) await ensureLutLoaded(draftLook).catch(() => {});
-    for (const entry of clips.values()) entry.drawCurrentFrame();
-  });
+    const look = els.look.value;
 
-  els.applyLook.addEventListener('click', () => {
-    if (!draftLook) return;
-    queue(
-      'apply_lut',
-      { lut_name: draftLook, intensity: 1 },
-      `Grade ${scopeOf(listAssets('video'))} with the ${draftLook} look`,
-    );
-    draftLook = '';
-    els.look.value = '';
+    if (lookOpId) {
+      removeOperation(lookOpId);
+      lookOpId = null;
+    }
+    if (look) {
+      await ensureLutLoaded(look).catch(() => {});
+      const op = pushOperation({
+        type: 'apply_lut',
+        assetIds: listAssets('video').map((a) => a.id),
+        params: { lut_name: look, intensity: 1 },
+        summary: `Grade ${scopeOf(listAssets('video'))} with the ${look} look`,
+        source: 'user',
+      });
+      lookOpId = op.id;
+    }
+    for (const entry of clips.values()) entry.drawCurrentFrame();
   });
 
   els.rotateLeft.addEventListener('click', () =>
@@ -203,13 +211,13 @@ function buildCell(asset) {
 
     // The grade: whatever is queued, plus whatever the control proposes.
     const queued = ops.find((op) => op.type === 'apply_lut');
-    const lookName = draftLook || queued?.params.lut_name;
+    const lookName = queued?.params.lut_name;
     if (!lookName) return;
 
     try {
       const lut = await lutFor(lookName);
       const image = context.getImageData(0, 0, canvas.width, canvas.height);
-      applyLutToPixels(image.data, lut, draftLook ? 1 : queued?.params.intensity ?? 1);
+      applyLutToPixels(image.data, lut, queued?.params.intensity ?? 1);
       context.putImageData(image, 0, 0);
     } catch (error) {
       console.error('[keepitoffline] could not preview the grade', error);

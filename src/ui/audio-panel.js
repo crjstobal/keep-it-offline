@@ -4,7 +4,14 @@
 // timeline with draggable handles. Playback previews the pending speed change
 // too, so what you hear is what the export will produce.
 
-import { listAssets, operationsFor, pushOperation } from '../core/workspace.js';
+import {
+  getState,
+  listAssets,
+  operationsFor,
+  pushOperation,
+  removeOperation,
+  updateOperation,
+} from '../core/workspace.js';
 import { plan } from '../core/audio.js';
 import { createTimeline } from './timeline.js';
 
@@ -24,21 +31,36 @@ function queue(type, params, summary) {
 export function init(elements) {
   els = elements;
 
+  // The slider owns one row on the stack and rewrites it as it moves: dragging
+  // through a dozen speeds should leave one change behind, not a dozen.
+  let speedOpId = null;
+
   els.speed.addEventListener('input', () => {
     const rate = Number(els.speed.value) / 100;
     els.speedValue.textContent = `${rate.toFixed(2)}×`;
-    // Anything playing follows the slider, so the change can be heard while
-    // it is being chosen rather than only after applying.
-    for (const entry of tracks.values()) entry.audio.playbackRate = rate;
-  });
 
-  els.applySpeed.addEventListener('click', () => {
-    const rate = Number(els.speed.value) / 100;
-    if (rate === 1) return;
-    queue('change_speed', { rate }, `Play ${scopeOf(listAssets('audio'))} at ${rate}×`);
-    els.speed.value = '100';
-    els.speedValue.textContent = '1.00×';
-    for (const entry of tracks.values()) entry.audio.playbackRate = 1;
+    // Anything playing follows the slider, so the change is heard as it is chosen.
+    for (const entry of tracks.values()) entry.audio.playbackRate = rate;
+
+    const summary = `Play ${scopeOf(listAssets('audio'))} at ${rate}×`;
+    if (rate === 1) {
+      if (speedOpId) removeOperation(speedOpId);
+      speedOpId = null;
+      return;
+    }
+    if (speedOpId && getState().operations.some((op) => op.id === speedOpId)) {
+      updateOperation(speedOpId, { params: { rate }, summary });
+      return;
+    }
+    const list = listAssets('audio');
+    if (list.length === 0) return;
+    speedOpId = pushOperation({
+      type: 'change_speed',
+      assetIds: list.map((a) => a.id),
+      params: { rate },
+      summary,
+      source: 'user',
+    }).id;
   });
 }
 

@@ -63,5 +63,18 @@ check('the removed file is dropped from the batch', batch.assetIds.length === 2 
 ws.removeAsset(m1.id); ws.removeAsset(m3.id);
 check('a batch covering nothing is discarded', ws.getState().operations.length === 0);
 
+// A live control owns one row and rewrites it, so dragging a slider through a
+// dozen values leaves one change behind rather than a dozen.
+ws.clearOperations();
+const liveAsset = ws.addAsset({ name: 'x.jpg', kind: 'image', bytes: new ArrayBuffer(2), meta: {} });
+const liveOp = ws.pushOperation({ type: 'adjust_image', assetIds: liveAsset.id, params: { brightness: 0.1 }, summary: 'brightness +10', source: 'user' });
+ws.updateOperation(liveOp.id, { params: { brightness: 0.8 }, summary: 'brightness +80' });
+check('updating an operation leaves one row', ws.getState().operations.length === 1);
+check('the updated value is kept', ws.getState().operations[0].params.brightness === 0.8);
+check('the summary follows the value', ws.getState().operations[0].summary === 'brightness +80');
+check('updating merges rather than replacing params', ws.updateOperation(liveOp.id, { params: { contrast: 0.2 } }) && ws.getState().operations[0].params.brightness === 0.8 && ws.getState().operations[0].params.contrast === 0.2);
+check('updating an operation that is gone reports failure', ws.updateOperation('op_missing', { summary: 'x' }) === false);
+ws.removeAsset(liveAsset.id);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -25,26 +25,27 @@ with sync_playwright() as pw:
     src = lambda i: p.evaluate(f"() => document.querySelectorAll('.image-cell img')[{i}]?.src ?? ''")
     before = [src(0), src(1)]
 
-    # Selecting a look must change the preview with no Apply click.
+    # Choosing a look is the change: the preview updates and the stack records it.
     p.select_option("#look-select", "black-and-white")
-    p.wait_for_timeout(2000)
+    p.wait_for_timeout(2500)
     after = [src(0), src(1)]
-    check("choosing a look previews live, before applying", after != before)
-    check("nothing was queued by previewing", p.locator(".op").count() == 0,
+    check("choosing a look updates the preview at once", after != before)
+    check("and lands on the stack without an Apply step", p.locator(".op").count() == 1,
           f"{p.locator('.op').count()} operations")
 
-    # Strength must also preview live.
+    # Strength rewrites that same row rather than adding another.
     p.locator("#look-strength").fill("30")
-    p.wait_for_timeout(2000)
+    p.wait_for_timeout(2500)
     weaker = [src(0), src(1)]
     check("strength previews live too", weaker != after)
+    check("dragging strength does not pile up rows", p.locator(".op").count() == 1,
+          f"{p.locator('.op').count()} operations")
     check("strength label follows the slider", "30%" in p.inner_text("#look-strength-value"),
           p.inner_text("#look-strength-value"))
 
     # Applying must add exactly one operation for both images.
-    p.click("#apply-look")
-    p.wait_for_timeout(2000)
-    check("applying a look to two images queues ONE operation",
+    p.wait_for_timeout(1500)
+    check("a look over two images is ONE operation",
           p.locator(".op").count() == 1, f"{p.locator('.op').count()} operations")
     summary = p.inner_text(".op-summary")
     check("the operation says how many files it covers", "2 images" in summary, summary)

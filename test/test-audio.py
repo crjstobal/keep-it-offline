@@ -38,9 +38,8 @@ with sync_playwright() as pw:
     p.wait_for_timeout(300)
     check("the speed label follows the slider", "2.00" in p.inner_text("#audio-speed-value"),
           p.inner_text("#audio-speed-value"))
-    p.click("#apply-speed")
-    p.wait_for_timeout(800)
-    check("speed queues one operation", p.locator(".op").count() == 1)
+    p.wait_for_timeout(1200)
+    check("moving the speed slider queues one operation", p.locator(".op").count() == 1)
     shown = p.inner_text(".audio-meta")
     check("the row shows the new duration", "2.0s" in shown, shown)
 

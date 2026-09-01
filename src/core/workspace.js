@@ -112,6 +112,23 @@ export function pushOperation({ type, assetIds, params, summary, source = 'user'
   return op;
 }
 
+/**
+ * Change an operation that is already on the stack.
+ *
+ * Dragging a slider produces a value every few milliseconds. Pushing each one
+ * would bury the stack in near-identical rows, so a live control pushes once and
+ * then edits that row as it moves: one entry, one undo, whatever the pointer did
+ * on the way there.
+ */
+export function updateOperation(id, { params, summary }) {
+  const op = state.operations.find((o) => o.id === id);
+  if (!op) return false;
+  if (params) op.params = { ...op.params, ...params };
+  if (summary) op.summary = summary;
+  notify();
+  return true;
+}
+
 export function setOperationEnabled(id, enabled) {
   const op = state.operations.find((o) => o.id === id);
   if (!op) return false;

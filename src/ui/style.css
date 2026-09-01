@@ -1177,3 +1177,99 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--radius);
 }
 .image-cell .image-name { font-size: 12.5px; padding-top: 2px; }
+
+/* --- File chips ---------------------------------------------------------- */
+/* A file is a small thing with a name and a way to close it. Once the rows are
+   this size, a whole list of them fits without needing to be folded away. */
+
+.asset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.asset {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  padding: 7px 8px 7px 13px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.asset-info { flex-direction: row; align-items: baseline; gap: 8px; }
+.asset-name { font-size: 13.5px; font-weight: 600; max-width: 210px; }
+.asset-detail { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* The chip is tinted by what it holds, matching the tools rail. */
+.asset::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.asset-pdf::before { background: var(--kind-pdf); }
+.asset-image::before { background: var(--kind-image); }
+.asset-video::before { background: var(--kind-video); }
+.asset-audio::before { background: var(--kind-audio); }
+
+.asset-remove {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin-left: 2px;
+  font-size: 16px;
+  line-height: 1;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+}
+.asset-remove:hover { background: var(--accent-soft); color: var(--accent-deep); }
+
+/* --- Compact dropzone ---------------------------------------------------- */
+/* Once files are loaded the doorway steps aside: one line, still a target. */
+
+.dropzone.is-compact {
+  padding: 11px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-style: dashed;
+  background: transparent;
+}
+.dropzone.is-compact .dropzone-main {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.dropzone.is-compact .dropzone-sub,
+.dropzone.is-compact .dropzone-icons { display: none; }
+.dropzone.is-compact:hover .dropzone-main { color: var(--accent-deep); }
+
+/* --- Zoom, over the work it sizes ---------------------------------------- */
+
+.worktools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.zoom-control input[type="range"] { width: 120px; }

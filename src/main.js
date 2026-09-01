@@ -56,13 +56,11 @@ audioPanel.init({
   list: document.getElementById('audio-list'),
   speed: document.getElementById('audio-speed'),
   speedValue: document.getElementById('audio-speed-value'),
-  applySpeed: document.getElementById('apply-speed'),
 });
 
 videoPanel.init({
   grid: document.getElementById('video-grid'),
   look: document.getElementById('video-look'),
-  applyLook: document.getElementById('video-apply-look'),
   rotateLeft: document.getElementById('video-rotate-left'),
   rotateRight: document.getElementById('video-rotate-right'),
   orientation: document.getElementById('video-orientation'),
@@ -73,11 +71,8 @@ imagePanel.init({
   lookSelect: document.getElementById('look-select'),
   lookStrength: document.getElementById('look-strength'),
   lookStrengthValue: document.getElementById('look-strength-value'),
-  applyLook: document.getElementById('apply-look'),
   resizeWidth: document.getElementById('resize-width'),
-  applyResize: document.getElementById('apply-resize'),
   formatSelect: document.getElementById('format-select'),
-  applyFormat: document.getElementById('apply-format'),
   rotateLeft: document.getElementById('image-rotate-left'),
   rotateRight: document.getElementById('image-rotate-right'),
   orientation: document.getElementById('image-orientation'),
@@ -85,13 +80,10 @@ imagePanel.init({
   contrast: document.getElementById('adj-contrast'),
   saturation: document.getElementById('adj-saturation'),
   vibrance: document.getElementById('adj-vibrance'),
-  applyAdjust: document.getElementById('apply-adjust'),
   resetAdjust: document.getElementById('reset-adjust'),
   vignette: document.getElementById('adj-vignette'),
-  applyVignette: document.getElementById('apply-vignette'),
   watermarkText: document.getElementById('watermark-text'),
   watermarkPosition: document.getElementById('watermark-position'),
-  applyWatermark: document.getElementById('apply-watermark'),
   maskShape: document.getElementById('mask-shape'),
   maskSize: document.getElementById('mask-size'),
   maskX: document.getElementById('mask-x'),
@@ -99,7 +91,6 @@ imagePanel.init({
   maskBorder: document.getElementById('mask-border'),
   maskBorderColor: document.getElementById('mask-border-color'),
   reshuffleBlob: document.getElementById('reshuffle-blob'),
-  applyMask: document.getElementById('apply-mask'),
 });
 
 // --- Manual editing --------------------------------------------------------
@@ -128,10 +119,6 @@ for (const button of document.querySelectorAll('[data-select]')) {
 
 // One control sizes each grid, so a long document can be scanned at a glance or
 // inspected closely without leaving the page.
-document.getElementById('files-summary').addEventListener('toggle', () => {
-  renderAssets(getState());
-});
-
 const thumbSize = document.getElementById('thumb-size');
 thumbSize.addEventListener('input', () => {
   els.gridHost.style.setProperty('--thumb-size', `${thumbSize.value}px`);
@@ -427,49 +414,25 @@ function describeAsset(asset) {
 function renderAssets(state) {
   els.assetList.replaceChildren();
 
-  // The headline has done its job once there is something on the bench.
+  const busy = state.assets.length > 0;
+
+  // The headline and the dropzone have both done their job once there is work
+  // on the bench: they shrink to a line, and the files take the space.
   const lede = document.getElementById('lede');
   if (lede) {
-    lede.classList.toggle('is-compact', state.assets.length > 0);
-    if (state.assets.length > 0) lede.querySelector('.lede-title').textContent = 'Your files';
-    else lede.querySelector('.lede-title').textContent = 'Your files stay on your computer.';
+    lede.classList.toggle('is-compact', busy);
+    lede.querySelector('.lede-title').textContent = busy
+      ? 'Your files'
+      : 'Your files stay on your computer.';
   }
-
-  // With a batch of photographs the file list is not the interesting part of
-  // the page: one line per file would push the previews off the screen
-  // entirely. Past a handful, collapse to a summary that can be opened.
-  const summary = document.getElementById('files-summary');
-  const many = state.assets.length > 4;
-  summary.hidden = !many;
-  els.assetList.classList.toggle('is-collapsed', many && !summary.open);
-
-  if (many) {
-    // Count every kind, not just the two that existed when this was written:
-    // a bench holding a video and a track should say so.
-    const counts = {};
-    for (const asset of state.assets) counts[asset.kind] = (counts[asset.kind] ?? 0) + 1;
-
-    const names = {
-      pdf: ['PDF', 'PDFs'],
-      image: ['image', 'images'],
-      video: ['video', 'videos'],
-      audio: ['track', 'tracks'],
-    };
-    const parts = Object.entries(counts).map(([kind, n]) => {
-      const [one, many_] = names[kind] ?? [kind, `${kind}s`];
-      return `${n} ${n === 1 ? one : many_}`;
-    });
-
-    const listed =
-      parts.length <= 1
-        ? parts.join('')
-        : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
-    summary.querySelector('summary').textContent = `${listed} on the bench`;
-  }
+  els.dropzone.classList.toggle('is-compact', busy);
+  els.dropzone.querySelector('.dropzone-main').textContent = busy
+    ? 'Drop more files here any time'
+    : 'Drop your files here';
 
   for (const asset of state.assets) {
     const li = document.createElement('li');
-    li.className = 'asset';
+    li.className = `asset asset-${asset.kind}`;
 
     const info = document.createElement('div');
     info.className = 'asset-info';
@@ -482,8 +445,11 @@ function renderAssets(state) {
     info.append(name, detail);
 
     const remove = document.createElement('button');
-    remove.className = 'ghost';
-    remove.textContent = 'Remove';
+    remove.className = 'asset-remove';
+    remove.type = 'button';
+    remove.title = `Take ${asset.name} off the bench`;
+    remove.setAttribute('aria-label', `Remove ${asset.name}`);
+    remove.textContent = '×';
     remove.addEventListener('click', () => removeAsset(asset.id));
 
     li.append(info, remove);

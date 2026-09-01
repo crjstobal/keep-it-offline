@@ -100,9 +100,6 @@
           <input type="file" id="file-input" multiple accept="application/pdf,image/*,video/*,audio/*" hidden />
         </div>
 
-        <details class="files-summary" id="files-summary" hidden>
-          <summary></summary>
-        </details>
         <ul class="asset-list" id="asset-list"></ul>
 
         <div class="editor" id="editor" hidden>
@@ -117,11 +114,13 @@
             <button class="ghost" id="rotate-right" disabled>Rotate ↻</button>
             <button class="ghost" id="remove-blank">Remove blank pages</button>
             <button class="danger" id="remove-selected" disabled>Remove selected</button>
-            <label class="field zoom-field">
+          </div>
+          <div class="worktools">
+            <span class="zoom-control">
               <span class="zoom-icon" aria-hidden="true">◻</span>
               <input type="range" id="thumb-size" min="70" max="560" value="130"
-                     aria-label="Thumbnail size" />
-            </label>
+                     aria-label="Page size" />
+            </span>
           </div>
           <div id="page-grid-host"></div>
         </div>
@@ -138,13 +137,13 @@
               <input type="range" id="look-strength" min="0" max="100" value="100" />
               <span id="look-strength-value">100%</span>
             </label>
-            <button class="ghost" id="apply-look">Apply look</button>
+            
             <span class="sep" aria-hidden="true"></span>
             <label class="field">
               Max width
               <input type="number" id="resize-width" min="1" placeholder="2000" />
             </label>
-            <button class="ghost" id="apply-resize">Resize</button>
+            
             <label class="field">
               Format
               <select id="format-select">
@@ -154,7 +153,7 @@
                 <option value="png">PNG</option>
               </select>
             </label>
-            <button class="ghost" id="apply-format">Convert</button>
+            
             <span class="sep" aria-hidden="true"></span>
             <button class="ghost" id="image-rotate-left">Rotate ↺</button>
             <button class="ghost" id="image-rotate-right">Rotate ↻</button>
@@ -184,7 +183,7 @@
               Vibrance
               <input type="range" class="adj" id="adj-vibrance" min="-100" max="100" value="0" />
             </label>
-            <button class="ghost" id="apply-adjust" disabled>Apply</button>
+            
             <button class="ghost" id="reset-adjust">Reset</button>
           </div>
           <div class="actionbar actionbar-secondary">
@@ -192,7 +191,7 @@
               Vignette
               <input type="range" id="adj-vignette" min="0" max="100" value="0" />
             </label>
-            <button class="ghost" id="apply-vignette" disabled>Apply</button>
+            
             <span class="sep" aria-hidden="true"></span>
             <label class="field">
               Watermark
@@ -209,7 +208,7 @@
                 <option value="top-center">Top centre</option>
               </select>
             </label>
-            <button class="ghost" id="apply-watermark">Add</button>
+            
           </div>
           <div class="actionbar actionbar-secondary">
             <label class="field">
@@ -240,16 +239,18 @@
             <input type="color" id="mask-border-color" value="#ffffff"
                    aria-label="Border colour" />
             <button class="ghost" id="reshuffle-blob" hidden>Reshuffle</button>
-            <button class="ghost" id="apply-mask" disabled>Apply mask</button>
+            
           </div>
           <div class="actionbar actionbar-secondary">
-            <span class="hint-inline">Everything here previews live. Apply adds one step to the stack.</span>
+            <span class="hint-inline">Every change shows at once and lands on the right. Untick it there to undo it.</span>
             <span class="sep" aria-hidden="true"></span>
-            <label class="field zoom-field">
+          </div>
+          <div class="worktools">
+            <span class="zoom-control">
               <span class="zoom-icon" aria-hidden="true">◻</span>
               <input type="range" id="image-thumb-size" min="140" max="560" value="260"
-                     aria-label="Thumbnail size" />
-            </label>
+                     aria-label="Photo size" />
+            </span>
           </div>
           <div class="image-grid" id="image-grid"></div>
         </div>
@@ -261,7 +262,7 @@
               Look
               <select id="video-look"></select>
             </label>
-            <button class="ghost" id="video-apply-look">Grade</button>
+            
             <span class="sep" aria-hidden="true"></span>
             <button class="ghost" id="video-rotate-left">Rotate ↺</button>
             <button class="ghost" id="video-rotate-right">Rotate ↻</button>
@@ -278,11 +279,13 @@
             <span class="hint-inline">Play a clip and drag the handles to choose a cut, or type the
               times. Scroll the timeline to zoom. Every frame is processed in this tab.</span>
             <span class="sep" aria-hidden="true"></span>
-            <label class="field zoom-field">
+          </div>
+          <div class="worktools">
+            <span class="zoom-control">
               <span class="zoom-icon" aria-hidden="true">◻</span>
               <input type="range" id="video-thumb-size" min="240" max="900" value="460"
                      aria-label="Video size" />
-            </label>
+            </span>
           </div>
           <div class="video-grid" id="video-grid"></div>
         </div>
@@ -295,7 +298,7 @@
               <input type="range" id="audio-speed" min="25" max="400" step="5" value="100" />
               <span id="audio-speed-value">1.00×</span>
             </label>
-            <button class="ghost" id="apply-speed">Apply speed</button>
+            
             <span class="sep" aria-hidden="true"></span>
             <span class="hint-inline">Play a track and drag the handles to choose a cut.
               Scroll the waveform to zoom in.</span>

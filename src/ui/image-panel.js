@@ -5,7 +5,14 @@
 // the result before anything is committed. Applying only fixes what is already
 // on screen.
 
-import { listAssets, operationsFor, pushOperation } from '../core/workspace.js';
+import {
+  getState,
+  listAssets,
+  operationsFor,
+  pushOperation,
+  removeOperation,
+  updateOperation,
+} from '../core/workspace.js';
 import { availableLuts, ensureLutLoaded } from '../core/luts.js';
 import { imageCall } from '../core/worker-bridge.js';
 import { openViewer } from './viewer.js';
@@ -16,23 +23,6 @@ const previewUrls = new Map();
 /** Full-resolution renders for the enlarged viewer, keyed by asset id. */
 const fullUrls = new Map();
 
-/**
- * What the controls currently propose, previewed but not committed.
- *
- * Every control feeds this one object, and previews render the stack plus the
- * draft, so a look, a brightness nudge and a vignette all show together before
- * any of them is fixed in place.
- */
-let draft = {
-  look: '',
-  intensity: 1,
-  brightness: 0,
-  contrast: 0,
-  saturation: 0,
-  vibrance: 0,
-  vignette: 0,
-  mask: null,
-};
 /** Guards against overlapping preview renders when the slider is dragged. */
 let previewToken = 0;
 
@@ -52,78 +42,182 @@ export function init(elements) {
     els.lookSelect.append(option);
   }
 
-  els.lookSelect.addEventListener('change', () => {
-    draft.look = els.lookSelect.value;
-    els.applyLook.disabled = !draft.look;
-    schedulePreview();
-  });
-
-  els.lookStrength.addEventListener('input', () => {
-    draft.intensity = Number(els.lookStrength.value) / 100;
-    els.lookStrengthValue.textContent = `${els.lookStrength.value}%`;
-    schedulePreview();
-  });
-
-  els.applyLook.addEventListener('click', () => {
-    if (!draft.look) return;
-    const images = listAssets('image');
-    const scope = images.length === 1 ? images[0].name : `${images.length} images`;
-    const percent = Math.round(draft.intensity * 100);
-
-    pushOperation({
-      type: 'apply_lut',
-      assetIds: images.map((a) => a.id),
-      params: { lut_name: draft.look, intensity: draft.intensity },
-      summary:
-        draft.intensity === 1
-          ? `Apply the ${draft.look} look to ${scope}`
-          : `Apply the ${draft.look} look at ${percent}% to ${scope}`,
-      source: 'user',
-    });
-
-    // The look is committed, so the draft goes back to neutral: leaving it set
-    // would show it twice, once queued and once as a pending preview. Looks
-    // still stack, so choosing another one adds a second step.
-    resetLookDraft();
-  });
-
-  els.applyResize.addEventListener('click', () => {
-    const maxWidth = Number(els.resizeWidth.value);
-    if (!maxWidth) return;
-    const images = listAssets('image');
-    pushOperation({
-      type: 'resize_images',
-      assetIds: images.map((a) => a.id),
-      params: { max_width: maxWidth },
-      summary:
-        images.length === 1
-          ? `Resize ${images[0].name} to fit ${maxWidth}px wide`
-          : `Resize ${images.length} images to fit ${maxWidth}px wide`,
-      source: 'user',
-    });
-  });
-
-  els.applyFormat.addEventListener('click', () => {
-    const format = els.formatSelect.value;
-    if (!format) return;
-    const images = listAssets('image');
-    pushOperation({
-      type: 'convert_format',
-      assetIds: images.map((a) => a.id),
-      params: { format },
-      summary:
-        images.length === 1
-          ? `Convert ${images[0].name} to ${format.toUpperCase()}`
-          : `Convert ${images.length} images to ${format.toUpperCase()}`,
-      source: 'user',
-    });
-  });
-
   const scopeOfImages = () => {
     const images = listAssets('image');
     return images.length === 1 ? images[0].name : `${images.length} images`;
   };
 
+  /**
+   * Push an operation, or edit the one this control already owns.
+   *
+   * Choosing a look or typing a width is a decision already made, so it goes
+   * straight onto the stack: the stack is where it is seen, and unticking it is
+   * how it is undone. An Apply button in between only asked people to confirm
+   * what they had just said.
+   *
+   * Dragging is the exception worth handling: a slider fires continuously, and
+   * pushing every value would bury the stack. Each live control therefore keeps
+   * one row and rewrites it as it moves.
+   */
+  const live = new Map();
+  function commit(key, { type, params, summary }) {
+    const images = listAssets('image');
+    if (images.length === 0) return;
+
+    const existing = live.get(key);
+    if (existing && getState().operations.some((op) => op.id === existing)) {
+      updateOperation(existing, { params, summary });
+      return;
+    }
+    const op = pushOperation({
+      type,
+      assetIds: images.map((a) => a.id),
+      params,
+      summary,
+      source: 'user',
+    });
+    live.set(key, op.id);
+  }
+
+  /** A control that has been returned to neutral owns no row any more. */
+  function release(key) {
+    const id = live.get(key);
+    live.delete(key);
+    if (id) removeOperation(id);
+  }
+
+  // --- Look ---------------------------------------------------------------
+  const applyLook = () => {
+    const look = els.lookSelect.value;
+    if (!look) {
+      release('look');
+      return;
+    }
+    const percent = Number(els.lookStrength.value);
+    commit('look', {
+      type: 'apply_lut',
+      params: { lut_name: look, intensity: percent / 100 },
+      summary:
+        percent === 100
+          ? `Apply the ${look} look to ${scopeOfImages()}`
+          : `Apply the ${look} look at ${percent}% to ${scopeOfImages()}`,
+    });
+  };
+
+  els.lookSelect.addEventListener('change', () => {
+    // A new look starts its own row rather than rewriting the last one, so two
+    // looks can be stacked.
+    live.delete('look');
+    applyLook();
+  });
+  els.lookStrength.addEventListener('input', () => {
+    els.lookStrengthValue.textContent = `${els.lookStrength.value}%`;
+    applyLook();
+  });
+
+  // --- Tonal adjustments --------------------------------------------------
+  const readAdjustments = () => ({
+    brightness: Number(els.brightness.value) / 100,
+    contrast: Number(els.contrast.value) / 100,
+    saturation: Number(els.saturation.value) / 100,
+    vibrance: Number(els.vibrance.value) / 100,
+  });
+
+  const applyAdjustments = () => {
+    const params = readAdjustments();
+    const set = Object.entries(params).filter(([, v]) => v !== 0);
+    if (set.length === 0) {
+      release('adjust');
+      return;
+    }
+    const described = set
+      .map(([key, value]) => `${key} ${value > 0 ? '+' : ''}${Math.round(value * 100)}`)
+      .join(', ');
+    commit('adjust', {
+      type: 'adjust_image',
+      params,
+      summary: `Adjust ${scopeOfImages()}: ${described}`,
+    });
+  };
+
+  for (const key of ['brightness', 'contrast', 'saturation', 'vibrance']) {
+    els[key].addEventListener('input', applyAdjustments);
+  }
+
+  els.resetAdjust.addEventListener('click', () => {
+    for (const key of ['brightness', 'contrast', 'saturation', 'vibrance']) {
+      els[key].value = '0';
+    }
+    els.vignette.value = '0';
+    els.lookSelect.value = '';
+    els.lookStrength.value = '100';
+    els.lookStrengthValue.textContent = '100%';
+    release('adjust');
+    release('vignette');
+    release('look');
+  });
+
+  // --- Vignette -----------------------------------------------------------
+  els.vignette.addEventListener('input', () => {
+    const amount = Number(els.vignette.value) / 100;
+    if (amount === 0) {
+      release('vignette');
+      return;
+    }
+    commit('vignette', {
+      type: 'apply_vignette',
+      params: { amount },
+      summary: `Vignette ${scopeOfImages()} at ${Math.round(amount * 100)}%`,
+    });
+  });
+
+  // --- Resize and format --------------------------------------------------
+  els.resizeWidth.addEventListener('input', () => {
+    const maxWidth = Number(els.resizeWidth.value);
+    if (!maxWidth) {
+      release('resize');
+      return;
+    }
+    commit('resize', {
+      type: 'resize_images',
+      params: { max_width: maxWidth },
+      summary: `Resize ${scopeOfImages()} to fit ${maxWidth}px wide`,
+    });
+  });
+
+  els.formatSelect.addEventListener('change', () => {
+    const format = els.formatSelect.value;
+    if (!format) {
+      release('format');
+      return;
+    }
+    commit('format', {
+      type: 'convert_format',
+      params: { format },
+      summary: `Convert ${scopeOfImages()} to ${format.toUpperCase()}`,
+    });
+  });
+
+  // --- Watermark ----------------------------------------------------------
+  const applyWatermark = () => {
+    const text = els.watermarkText.value.trim();
+    if (!text) {
+      release('watermark');
+      return;
+    }
+    const position = els.watermarkPosition.value;
+    commit('watermark', {
+      type: 'add_watermark',
+      params: { text, position, opacity: 0.6, size: 0.05 },
+      summary: `Watermark ${scopeOfImages()} with "${text}" (${position})`,
+    });
+  };
+  els.watermarkText.addEventListener('input', applyWatermark);
+  els.watermarkPosition.addEventListener('change', applyWatermark);
+
+  // --- Rotation -----------------------------------------------------------
+  // A turn is a discrete act, so each press is its own row: pressing twice
+  // means two quarter turns, not one row rewritten.
   const queueForAll = (type, params, summary) => {
     const images = listAssets('image');
     if (images.length === 0) return;
@@ -143,151 +237,44 @@ export function init(elements) {
     els.orientation.value = '';
   });
 
-  // Tonal controls: each one previews as it moves, and Apply fixes whatever is
-  // on screen as a single operation rather than one per slider.
-  for (const key of ['brightness', 'contrast', 'saturation', 'vibrance']) {
-    els[key].addEventListener('input', () => {
-      draft[key] = Number(els[key].value) / 100;
-      els.applyAdjust.disabled = !hasAdjustments();
-      schedulePreview();
-    });
-  }
+  // --- Mask ---------------------------------------------------------------
+  let maskSeed = Math.floor(Math.random() * 100000);
 
-  els.applyAdjust.addEventListener('click', () => {
-    if (!hasAdjustments()) return;
-    const described = ['brightness', 'contrast', 'saturation', 'vibrance']
-      .filter((key) => draft[key] !== 0)
-      .map((key) => `${key} ${draft[key] > 0 ? '+' : ''}${Math.round(draft[key] * 100)}`)
-      .join(', ');
-
-    queueForAll(
-      'adjust_image',
-      {
-        brightness: draft.brightness,
-        contrast: draft.contrast,
-        saturation: draft.saturation,
-        vibrance: draft.vibrance,
-      },
-      `Adjust ${scopeOfImages()}: ${described}`,
-    );
-    resetAdjustDraft();
-  });
-
-  els.resetAdjust.addEventListener('click', () => {
-    resetAdjustDraft();
-    resetVignetteDraft();
-    resetLookDraft();
-    schedulePreview();
-  });
-
-  els.vignette.addEventListener('input', () => {
-    draft.vignette = Number(els.vignette.value) / 100;
-    els.applyVignette.disabled = draft.vignette === 0;
-    schedulePreview();
-  });
-
-  els.applyVignette.addEventListener('click', () => {
-    if (draft.vignette === 0) return;
-    queueForAll(
-      'apply_vignette',
-      { amount: draft.vignette },
-      `Vignette ${scopeOfImages()} at ${Math.round(draft.vignette * 100)}%`,
-    );
-    resetVignetteDraft();
-  });
-
-  els.applyWatermark.addEventListener('click', () => {
-    const text = els.watermarkText.value.trim();
-    if (!text) return;
-    const position = els.watermarkPosition.value;
-    queueForAll(
-      'add_watermark',
-      { text, position, opacity: 0.6, size: 0.05 },
-      `Watermark ${scopeOfImages()} with "${text}" (${position})`,
-    );
-    els.watermarkText.value = '';
-  });
-
-  // Masking: the shape previews as it is dragged into place, and a blob keeps a
-  // seed so Reshuffle can offer a genuinely different shape rather than nudging
-  // the same one.
-  const readMask = () => {
+  const applyMask = () => {
     const shape = els.maskShape.value;
-    if (!shape) return null;
-    return {
-      shape,
-      x: Number(els.maskX.value) / 100,
-      y: Number(els.maskY.value) / 100,
-      size: Number(els.maskSize.value) / 100,
-      seed: draft.mask?.seed ?? Math.floor(Math.random() * 100000),
-      border_width: Number(els.maskBorder.value) / 10,
-      border_color: els.maskBorderColor.value,
-    };
-  };
-
-  const updateMask = () => {
-    draft.mask = readMask();
-    els.applyMask.disabled = !draft.mask;
-    els.reshuffleBlob.hidden = els.maskShape.value !== 'blob';
-    schedulePreview();
+    els.reshuffleBlob.hidden = shape !== 'blob';
+    if (!shape) {
+      release('mask');
+      return;
+    }
+    commit('mask', {
+      type: 'apply_mask',
+      params: {
+        shape,
+        x: Number(els.maskX.value) / 100,
+        y: Number(els.maskY.value) / 100,
+        size: Number(els.maskSize.value) / 100,
+        seed: maskSeed,
+        border_width: Number(els.maskBorder.value) / 10,
+        border_color: els.maskBorderColor.value,
+      },
+      summary: `Mask ${scopeOfImages()} to a ${shape}`,
+    });
   };
 
   els.maskShape.addEventListener('change', () => {
-    // A new shape gets a new seed, so switching to blob is not always the same one.
-    draft.mask = null;
-    updateMask();
+    maskSeed = Math.floor(Math.random() * 100000);
+    applyMask();
   });
   for (const control of [els.maskSize, els.maskX, els.maskY, els.maskBorder]) {
-    control.addEventListener('input', updateMask);
+    control.addEventListener('input', applyMask);
   }
-  els.maskBorderColor.addEventListener('input', updateMask);
-
+  els.maskBorderColor.addEventListener('input', applyMask);
   els.reshuffleBlob.addEventListener('click', () => {
-    if (!draft.mask) return;
-    draft.mask = { ...draft.mask, seed: Math.floor(Math.random() * 100000) };
-    schedulePreview();
+    maskSeed = Math.floor(Math.random() * 100000);
+    applyMask();
   });
-
-  els.applyMask.addEventListener('click', () => {
-    if (!draft.mask) return;
-    queueForAll('apply_mask', { ...draft.mask }, `Mask ${scopeOfImages()} to a ${draft.mask.shape}`);
-    draft.mask = null;
-    els.maskShape.value = '';
-    els.applyMask.disabled = true;
-    els.reshuffleBlob.hidden = true;
-  });
-
-  els.applyLook.disabled = true;
 }
-
-function resetLookDraft() {
-  draft.look = '';
-  draft.intensity = 1;
-  els.lookSelect.value = '';
-  els.lookStrength.value = '100';
-  els.lookStrengthValue.textContent = '100%';
-  els.applyLook.disabled = true;
-}
-
-function resetAdjustDraft() {
-  draft.brightness = 0;
-  draft.contrast = 0;
-  draft.saturation = 0;
-  draft.vibrance = 0;
-  for (const key of ['brightness', 'contrast', 'saturation', 'vibrance']) {
-    els[key].value = '0';
-  }
-  els.applyAdjust.disabled = true;
-}
-
-function resetVignetteDraft() {
-  draft.vignette = 0;
-  els.vignette.value = '0';
-  els.applyVignette.disabled = true;
-}
-
-const hasAdjustments = () =>
-  draft.brightness !== 0 || draft.contrast !== 0 || draft.saturation !== 0 || draft.vibrance !== 0;
 
 /**
  * Dragging the strength slider fires continuously, and each preview is a full
@@ -305,34 +292,15 @@ function schedulePreview() {
   }, 90);
 }
 
-/** The operations to preview: what is committed, plus what the controls propose. */
+/**
+ * What to preview: the stack, and nothing else.
+ *
+ * The controls no longer hold a pending state of their own. Everything they say
+ * goes onto the stack immediately, so the preview and the stack cannot disagree
+ * and there is one place to undo anything.
+ */
 function previewOperations(assetId) {
-  const ops = operationsFor(assetId).map((op) => ({ type: op.type, params: op.params }));
-
-  if (draft.look) {
-    ops.push({
-      type: 'apply_lut',
-      params: { lut_name: draft.look, intensity: draft.intensity },
-    });
-  }
-  if (hasAdjustments()) {
-    ops.push({
-      type: 'adjust_image',
-      params: {
-        brightness: draft.brightness,
-        contrast: draft.contrast,
-        saturation: draft.saturation,
-        vibrance: draft.vibrance,
-      },
-    });
-  }
-  if (draft.vignette > 0) {
-    ops.push({ type: 'apply_vignette', params: { amount: draft.vignette } });
-  }
-  if (draft.mask) {
-    ops.push({ type: 'apply_mask', params: { ...draft.mask } });
-  }
-  return ops;
+  return operationsFor(assetId).map((op) => ({ type: op.type, params: op.params }));
 }
 
 export function setThumbSize(px) {
