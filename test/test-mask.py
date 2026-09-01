@@ -97,6 +97,32 @@ with sync_playwright() as pw:
     check("applying a mask queues one operation", p.locator(".op").count() == 1,
           f"{p.locator('.op').count()} ops")
 
+    # A preview that overflows its frame is clipped, and a centred mask then
+    # looks off-centre. Every shape of photograph has to letterbox, not crop.
+    p.evaluate("""async () => {
+        const { getState, removeAsset } = await import('./src/core/workspace.js');
+        for (const a of [...getState().assets]) removeAsset(a.id);
+    }""")
+    p.wait_for_timeout(500)
+    demo = os.path.join(os.path.dirname(os.path.dirname(S)), "demo-assets")
+    p.set_input_files("#file-input", [os.path.join(demo, "photo-cafe.jpg"),
+                                      os.path.join(demo, "photo-desk.jpg"),
+                                      os.path.join(demo, "photo-market.jpg")])
+    p.wait_for_selector("#mask-shape", timeout=20000)
+    p.wait_for_timeout(4000)
+    p.select_option("#mask-shape", "circle")
+    p.wait_for_timeout(3500)
+
+    layout = p.evaluate("""() => [...document.querySelectorAll('.image-cell')].map(c => {
+        const f = c.querySelector('.image-frame').getBoundingClientRect();
+        const i = c.querySelector('img').getBoundingClientRect();
+        return {name: c.querySelector('.image-name').textContent,
+                fits: i.width <= f.width + 1 && i.height <= f.height + 1};
+    })""")
+    check("previews of every shape fit inside their frame",
+          layout and all(x["fits"] for x in layout),
+          str([x for x in layout if not x["fits"]]))
+
     check("no errors", not errors, "; ".join(errors[:3]))
     b.close()
 

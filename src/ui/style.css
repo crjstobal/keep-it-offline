@@ -69,8 +69,10 @@ body {
   letter-spacing: -0.015em;
 }
 
-/* A closed toolbox: tools inside, lid shut. It says workshop and safe at once,
-   where a padlock only says safe. */
+/* A padlock whose body is a toolbox: the shackle is also the handle. A lock
+   alone says safe but not workshop; a toolbox alone says the opposite. */
+.mark { color: var(--accent); flex-shrink: 0; }
+
 .toolbox {
   width: 38px;
   height: 34px;
@@ -151,17 +153,93 @@ body {
   background: var(--agent);
 }
 
+/* Tools on the left, the work in the middle, what changed on the right. The
+   centre column belongs to the files: controls that were sitting in it were
+   pushing the actual work down the page. */
 main {
   display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: 20px;
-  padding: 20px 24px 48px;
+  grid-template-columns: 300px minmax(0, 1fr) 340px;
+  gap: 18px;
+  padding: 18px 24px 48px;
   align-items: start;
 }
+main:has(#rail[hidden]) { grid-template-columns: minmax(0, 1fr) 340px; }
 
-@media (max-width: 900px) {
-  main { grid-template-columns: 1fr; }
+@media (max-width: 1200px) {
+  main, main:has(#rail[hidden]) { grid-template-columns: 260px minmax(0, 1fr); }
+  .side { grid-column: 1 / -1; flex-direction: row; }
+  .side > * { flex: 1; }
 }
+@media (max-width: 860px) {
+  main, main:has(#rail[hidden]) { grid-template-columns: 1fr; }
+  .side { flex-direction: column; }
+}
+
+/* --- Tools rail ---------------------------------------------------------- */
+
+.rail {
+  position: sticky;
+  top: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 18px;
+  max-height: calc(100vh - 108px);
+  overflow-y: auto;
+}
+.rail[hidden] { display: none; }
+.rail-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+.rail-body { display: flex; flex-direction: column; gap: 18px; }
+
+.rail-group { display: flex; flex-direction: column; gap: 8px; }
+.rail-group h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* Each group takes the colour of the files it acts on. */
+.rail-pdf h3 { color: var(--kind-pdf); }
+.rail-image h3 { color: var(--kind-image); }
+.rail-video h3 { color: var(--kind-video); }
+.rail-audio h3 { color: var(--kind-audio); }
+
+/* In the rail the bars stack rather than run across, and lose their own
+   chrome: the rail is already a panel. */
+.rail .actionbar,
+.rail .actionbar-secondary {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+}
+.rail .field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+.rail .field select,
+.rail .field input[type="number"],
+.rail .field input[type="text"] { flex: 1; min-width: 0; width: auto; }
+.rail .field input[type="range"] { flex: 1; width: auto; min-width: 70px; }
+.rail .field input.adj { width: auto; }
+.rail .sep { display: none; }
+.rail .zoom-field { margin-left: 0; }
+.rail .hint-inline { font-size: 12px; line-height: 1.45; }
+.rail .selection-count { margin: 0; font-size: 12px; }
+.rail button { width: 100%; }
 
 h2 {
   font-size: 17px;
@@ -182,7 +260,7 @@ h2 {
 .dropzone {
   border: 1px solid var(--line);
   border-radius: 20px;
-  padding: 40px 24px 36px;
+  padding: 20px 20px 18px;
   text-align: center;
   cursor: pointer;
   background: var(--panel);
@@ -194,12 +272,12 @@ h2 {
   outline: none;
 }
 .dropzone-main {
-  margin: 0 0 7px;
-  font-size: 21px;
+  margin: 0 0 3px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.015em;
 }
-.dropzone-sub { margin: 0; font-size: 15.5px; color: var(--text-2); }
+.dropzone-sub { margin: 0; font-size: 14px; color: var(--text-2); }
 
 .asset-list, .op-list, .tool-list { list-style: none; margin: 16px 0 0; padding: 0; }
 
@@ -548,13 +626,6 @@ input[type="range"] { accent-color: var(--accent); }
   flex-direction: column;
   gap: 6px;
 }
-.image-cell img {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: contain;
-  background: var(--panel-2);
-  border-radius: 4px;
-}
 .image-cell .image-name {
   font-size: 11px;
   color: var(--muted);
@@ -584,20 +655,23 @@ input[type="range"] { accent-color: var(--accent); }
 /* --- Image cells --------------------------------------------------------- */
 
 .image-cell { position: relative; }
+/* The frame is a fixed box and the image fills it with object-fit doing the
+   letterboxing. Sizing the image by max-height instead does not work here: a
+   grid item does not resolve a percentage height against a parent whose own
+   height comes from aspect-ratio, so a square or portrait photo overflowed and
+   was clipped, which is what made a centred mask look off-centre. */
 .image-frame {
   width: 100%;
   aspect-ratio: 4 / 3;
-  display: grid;
-  place-items: center;
   overflow: hidden;
   background: var(--panel-2);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .image-cell img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  aspect-ratio: auto;
   background: transparent;
 }
 
@@ -664,16 +738,16 @@ input[type="range"] { accent-color: var(--accent); }
 .dropzone-icons {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-top: 26px;
+  gap: 10px;
+  margin-top: 14px;
 }
 .dropzone-icons .kind {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 22px 16px;
-  border-radius: var(--radius);
+  gap: 8px;
+  padding: 12px 10px;
+  border-radius: var(--radius-sm);
   background: var(--panel-2);
   border: 1px solid var(--line-soft);
   text-align: center;
@@ -694,15 +768,18 @@ input[type="range"] { accent-color: var(--accent); }
 .kind-audio .kind-tile { background: var(--kind-audio-soft); color: var(--kind-audio); }
 
 .dropzone-icons b {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  line-height: 1.2;
 }
 .dropzone-icons small {
-  font-size: 13.5px;
-  color: var(--text-2);
-  line-height: 1.35;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.25;
 }
+/* The tile keeps its size; the glyph inside grows into it. */
+.kind-tile svg { width: 30px; height: 30px; }
 
 @media (max-width: 900px) {
   .dropzone-icons { grid-template-columns: repeat(2, 1fr); }
@@ -1012,3 +1089,91 @@ input[type="color"] {
 @media (max-width: 900px) {
   .lede-title { font-size: 34px; }
 }
+
+/* --- Action buttons ------------------------------------------------------ */
+/* Apply is where an adjustment becomes a change, so it has to look like the
+   thing to press. A ghost button beside four sliders disappears. */
+
+#apply-look, #apply-adjust, #apply-vignette, #apply-watermark, #apply-mask,
+#apply-resize, #apply-format, #video-apply-look, #apply-speed, #reshuffle-blob,
+#remove-blank {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-deep);
+  font-weight: 600;
+  padding: 9px 14px;
+}
+#apply-look:hover:not(:disabled), #apply-adjust:hover:not(:disabled),
+#apply-vignette:hover:not(:disabled), #apply-watermark:hover:not(:disabled),
+#apply-mask:hover:not(:disabled), #apply-resize:hover:not(:disabled),
+#apply-format:hover:not(:disabled), #video-apply-look:hover:not(:disabled),
+#apply-speed:hover:not(:disabled), #reshuffle-blob:hover:not(:disabled),
+#remove-blank:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+#apply-look:disabled, #apply-adjust:disabled, #apply-vignette:disabled,
+#apply-mask:disabled {
+  background: var(--panel-2);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Video and sound controls answer to their own hue, so the rail is readable at
+   a glance when several kinds are loaded. */
+.rail-video #video-apply-look { background: var(--kind-video-soft); color: var(--agent-deep); }
+.rail-video #video-apply-look:hover { background: var(--kind-video); color: #fff; }
+.rail-audio #apply-speed { background: var(--kind-audio-soft); color: #0b6b60; }
+.rail-audio #apply-speed:hover { background: var(--kind-audio); color: #fff; }
+
+
+/* --- Range inputs -------------------------------------------------------- */
+/* accent-color alone leaves the unfilled part of the track dark, which reads as
+   a hole punched in the paper. Drawn explicitly instead. */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line);
+}
+input[type="range"]::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -5px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px rgb(35 33 29 / 0.25);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+}
+
+/* --- Photo grid ---------------------------------------------------------- */
+/* With the controls moved out, the centre column has room: photographs can be
+   looked at rather than merely identified. */
+.image-grid { grid-template-columns: repeat(auto-fill, minmax(var(--thumb-size, 260px), 1fr)); }
+.image-frame { aspect-ratio: 3 / 2; }
+.image-cell {
+  padding: 10px;
+  border-radius: var(--radius);
+}
+.image-cell .image-name { font-size: 12.5px; padding-top: 2px; }

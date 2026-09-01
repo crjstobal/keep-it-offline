@@ -543,9 +543,64 @@ function renderTools(names) {
   }
 }
 
+/**
+ * Move the control bars into the left rail, and leave the middle column to the
+ * work itself.
+ *
+ * The panels are built where they are declared, so this relocates them rather
+ * than duplicating them: one set of controls, one set of listeners, wherever
+ * they happen to sit on screen.
+ */
+function layoutRail(state) {
+  const rail = document.getElementById('rail');
+  const body = document.getElementById('rail-body');
+
+  // Every bar in an editor moves, however many it has: naming them one by one
+  // meant a later addition (the mask row) was silently left behind.
+  const groups = [
+    ['pdf', 'Pages', '#editor'],
+    ['image', 'Photos', '#image-editor'],
+    ['video', 'Video', '#video-editor'],
+    ['audio', 'Sound', '#audio-editor'],
+  ];
+
+  const kinds = new Set(state.assets.map((a) => a.kind));
+  rail.hidden = kinds.size === 0;
+
+  for (const [kind, label, editorSelector] of groups) {
+    let section = body.querySelector(`[data-kind="${kind}"]`);
+
+    if (!kinds.has(kind)) {
+      // The bars are borrowed, not owned: hand them back before dropping the
+      // section, or removing the last file of a kind destroys its controls and
+      // they are gone for good when a file of that kind is loaded again.
+      if (section) {
+        const editor = document.querySelector(editorSelector);
+        for (const bar of section.querySelectorAll('.actionbar')) editor?.append(bar);
+        section.remove();
+      }
+      continue;
+    }
+    if (!section) {
+      section = document.createElement('section');
+      section.className = `rail-group rail-${kind}`;
+      section.dataset.kind = kind;
+      const heading = document.createElement('h3');
+      heading.textContent = label;
+      section.append(heading);
+      body.append(section);
+    }
+    const editor = document.querySelector(editorSelector);
+    for (const bar of editor?.querySelectorAll(':scope > .actionbar') ?? []) {
+      section.append(bar);
+    }
+  }
+}
+
 subscribe((state) => {
   renderAssets(state);
   renderOperations(state);
+  layoutRail(state);
 
   // Show the first PDF in the editor, and keep the grid in step with the stack
   // so a page removed by the agent greys out as soon as the tool returns.
