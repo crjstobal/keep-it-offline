@@ -203,6 +203,26 @@ with sync_playwright() as pw:
     page.wait_for_timeout(300)
     check("escape closes the viewer", page.locator(".viewer:not([hidden])").count() == 0)
 
+    # Pages reorder by dragging, into the gap the marker draws.
+    page.evaluate("""async () => {
+        const { clearOperations } = await import('./src/core/workspace.js');
+        clearOperations();
+    }""")
+    page.wait_for_timeout(400)
+
+    src_box = page.locator(".page-cell").nth(2).bounding_box()
+    dst_box = page.locator(".page-cell").nth(0).bounding_box()
+    page.mouse.move(src_box["x"] + src_box["width"]/2, src_box["y"] + src_box["height"]/2)
+    page.mouse.down()
+    page.mouse.move(dst_box["x"] + 2, dst_box["y"] + dst_box["height"]/2, steps=12)
+    page.wait_for_timeout(400)
+    check("a marker shows where a page will land",
+          page.locator(".page-cell.drop-before, .page-cell.drop-after").count() == 1)
+    page.mouse.up()
+    page.wait_for_timeout(1500)
+    moves = [t for t in page.evaluate("() => [...document.querySelectorAll('.op-summary')].map(e=>e.textContent)") if "Move page" in t]
+    check("dragging a page queues a reorder", len(moves) == 1, str(moves))
+
     check("no errors during interaction", not errors, "; ".join(errors[:3]))
 
     page.screenshot(path=f"{S}/rotated.png", full_page=True)

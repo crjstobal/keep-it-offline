@@ -135,6 +135,29 @@ with sync_playwright() as pw:
     check("a clip already portrait is left alone",
           portrait["to"] == [360, 640] and portrait["rot"] == 0, str(portrait))
 
+    # A clip carries the same two controls a photograph does.
+    check("each clip has a view and a remove control",
+          p.locator(".video-cell .cell-button").count() == p.locator(".video-cell").count() * 2)
+
+    # A look takes a strength, and rotation folds rather than stacking.
+    p.evaluate("""async () => {
+        const { clearOperations } = await import('./src/core/workspace.js');
+        clearOperations();
+    }""")
+    p.wait_for_timeout(400)
+    p.select_option("#video-look", "warm")
+    p.wait_for_timeout(2000)
+    p.locator("#video-strength").fill("40")
+    p.wait_for_timeout(1800)
+    graded = [t for t in p.evaluate("() => [...document.querySelectorAll('.op-summary')].map(e=>e.textContent)") if "warm" in t]
+    check("a video look takes a strength", graded and "40%" in graded[0], str(graded))
+    check("changing strength keeps it to one row", len(graded) == 1, str(graded))
+
+    p.click("#video-rotate-left"); p.wait_for_timeout(700)
+    p.click("#video-rotate-left"); p.wait_for_timeout(900)
+    rots = [t for t in p.evaluate("() => [...document.querySelectorAll('.op-summary')].map(e=>e.textContent)") if "Rotate" in t]
+    check("two turns fold into a half turn", len(rots) == 1 and "180" in rots[0], str(rots))
+
     check("no errors throughout", not errors, "; ".join(errors[:3]))
     b.close()
 

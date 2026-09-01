@@ -109,6 +109,24 @@ async function describe(bytes) {
   return { pageCount: pages.length, pages };
 }
 
+/**
+ * Join several documents into one, each with its own edits already applied.
+ *
+ * Merging after editing rather than before is what makes the result
+ * predictable: pages removed from the second document are gone before it is
+ * appended, so the page numbers a person saw are the ones they get.
+ */
+async function mergeDocuments(sources) {
+  const merged = await PDFDocument.create();
+
+  for (const source of sources) {
+    const edited = await applyOperations(source.bytes, source.operations ?? []);
+    const copied = await merged.copyPages(edited, edited.getPageIndices());
+    for (const page of copied) merged.addPage(page);
+  }
+  return merged;
+}
+
 self.onmessage = async (event) => {
   const { id, action, payload } = event.data;
   try {
@@ -117,6 +135,15 @@ self.onmessage = async (event) => {
       case 'describe':
         result = await describe(payload.bytes);
         break;
+      case 'merge': {
+        const merged = await mergeDocuments(payload.sources);
+        const out = await merged.save();
+        self.postMessage(
+          { id, ok: true, result: { bytes: out.buffer, pageCount: merged.getPageCount() } },
+          [out.buffer],
+        );
+        return;
+      }
       case 'apply': {
         const doc = await applyOperations(payload.bytes, payload.operations);
         const out = await doc.save();

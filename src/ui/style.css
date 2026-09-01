@@ -1485,3 +1485,67 @@ input[type="range"]::-moz-range-thumb {
   margin: 4px 0 2px;
   background: var(--line);
 }
+
+/* --- Dragging a file over the window ------------------------------------- */
+/* Anywhere over the app is a drop target, so the whole page answers rather
+   than a strip near the top. */
+
+body.is-file-dragging::after {
+  content: "Drop to add these files";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--accent-deep);
+  background: rgb(253 232 221 / 0.82);
+  border: 3px dashed var(--accent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+/* The empty state gives the doorway real presence: there is nothing else on
+   the page, so it may as well be the page. */
+.bench:has(.dropzone:not([hidden])) .dropzone { padding: 56px 32px 48px; }
+
+/* Pages reorder by dragging, with the same line-in-the-gap as photographs. */
+.page-cell { cursor: grab; }
+.page-cell.is-dragging { opacity: 0.4; cursor: grabbing; }
+.page-cell.drop-before::before,
+.page-cell.drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  z-index: 2;
+}
+.page-cell.drop-before::before { left: -8px; }
+.page-cell.drop-after::after { right: -8px; }
+
+/* A PDF keeps a row because the grid below shows its pages, not the file: the
+   row is where the document itself is named, removed, and joined to another.
+   It needs room to read as a separate thing from the pages under it. */
+.asset-list:not(:empty) {
+  margin: 4px 0 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.asset { padding: 9px 10px 9px 15px; }
+.asset-name { font-size: 14px; }
+
+.asset-action { display: inline-flex; align-items: center; }
+.asset-action button {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-deep);
+  font-weight: 600;
+  padding: 9px 15px;
+  border-radius: 999px;
+}
+.asset-action button:hover { background: var(--accent); color: #fff; }

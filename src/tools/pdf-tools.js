@@ -344,3 +344,55 @@ declareTool({
     },
   },
 });
+
+declareTool({
+  when: (kinds) => kinds.has('pdf'),
+  definition: {
+    name: 'merge_pdfs',
+    description:
+      'Join two or more loaded PDFs into a single document, in the order given. ' +
+      'Each document keeps the changes queued against it, so pages removed from one ' +
+      'are gone before it is appended. Call describe_workspace first to get the file ids. ' +
+      'This produces a download immediately rather than queueing a change.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 2,
+          description:
+            'The PDFs to join, in the order they should appear. Omit to join every ' +
+            'loaded PDF in the order they are on the bench.',
+        },
+        name: { type: 'string', description: 'Name for the combined file.' },
+      },
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ file_ids, name }) => {
+      const pdfs = listAssets('pdf');
+      if (pdfs.length < 2) {
+        throw new Error('Merging needs at least two PDFs on the bench.');
+      }
+
+      const chosen = file_ids?.length
+        ? file_ids.map((id) => {
+            const asset = getAsset(id);
+            if (!asset || asset.kind !== 'pdf') throw new Error(`No PDF with id "${id}".`);
+            return asset;
+          })
+        : pdfs;
+
+      if (chosen.length < 2) throw new Error('Give at least two file ids to join.');
+
+      window.dispatchEvent(
+        new CustomEvent('keepitoffline:merge', {
+          detail: { assetIds: chosen.map((a) => a.id), name },
+        }),
+      );
+
+      const total = chosen.reduce((n, a) => n + a.meta.pageCount, 0);
+      return `Joining ${chosen.length} PDFs (about ${total} pages before any queued removals) and preparing the download. Nothing left the browser.`;
+    },
+  },
+});

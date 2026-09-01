@@ -262,24 +262,20 @@
         </div>
 
         <div class="editor" id="video-editor" hidden>
-          <div class="actionbar">
+          <div class="actionbar" data-label="Colour and rotation">
             <span class="selection-count">Applies to every loaded video</span>
             <label class="field">
               Look
               <select id="video-look"></select>
             </label>
-            
-            <span class="sep" aria-hidden="true"></span>
-            <button class="ghost" id="video-rotate-left">Rotate ↺</button>
-            <button class="ghost" id="video-rotate-right">Rotate ↻</button>
             <label class="field">
-              Shape
-              <select id="video-orientation">
-                <option value="">Keep</option>
-                <option value="portrait">All portrait</option>
-                <option value="landscape">All landscape</option>
-              </select>
+              Strength
+              <input type="range" id="video-strength" min="0" max="100" value="100" />
+              <span id="video-strength-value">100%</span>
             </label>
+            <span class="field-divider" aria-hidden="true"></span>
+            <button class="ghost" id="video-rotate-left">Rotate left</button>
+            <button class="ghost" id="video-rotate-right">Rotate right</button>
           </div>
           <div class="actionbar actionbar-secondary">
             <span class="hint-inline">Play a clip and drag the handles to choose a cut, or type the

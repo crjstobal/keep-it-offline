@@ -42,6 +42,8 @@ export async function showAsset(asset, container) {
 
   // Placeholders first, filled in as each page renders, so a long document
   // shows its shape immediately instead of a blank area.
+  attachGridReordering(grid, container);
+
   await renderThumbnails(asset.id, asset.bytes, (index, total, dataUrl) => {
     thumbs[index] = dataUrl;
     if (grid.children.length === 0) {
@@ -119,6 +121,118 @@ function fillCell(cell, index, dataUrl) {
   });
 
   cell.append(check, zoom, frame, label);
+  cell.draggable = true;
+  attachPageReordering(cell, index);
+}
+
+/**
+ * Drag a page to move it.
+ *
+ * Reordering is the one PDF edit that cannot be described by a page number
+ * alone, so it wants a pointer rather than a form. The drop lands in the gap
+ * between two pages, marked by a line, the same way photographs move.
+ */
+function attachPageReordering(cell, index) {
+  cell.addEventListener('dragstart', (event) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+    cell.classList.add('is-dragging');
+  });
+  cell.addEventListener('dragend', clearPageMarkers);
+}
+
+function clearPageMarkers() {
+  const grid = document.querySelector('.page-grid');
+  for (const cell of grid?.querySelectorAll('.page-cell') ?? []) {
+    cell.classList.remove('is-dragging', 'drop-before', 'drop-after');
+  }
+}
+
+/** The gap nearest the pointer, as an index into the current page order. */
+function pageGapUnderPointer(grid, event) {
+  const cells = [...grid.querySelectorAll('.page-cell:not(.is-dragging)')];
+  if (cells.length === 0) return null;
+
+  let best = null;
+  for (const [position, cell] of cells.entries()) {
+    const box = cell.getBoundingClientRect();
+    for (const [edge, x] of [['before', box.left], ['after', box.right]]) {
+      const distance = Math.hypot(x - event.clientX, box.top + box.height / 2 - event.clientY);
+      if (!best || distance < best.distance) {
+        best = { distance, cell, edge, index: edge === 'before' ? position : position + 1 };
+      }
+    }
+  }
+  return best;
+}
+
+/** One listener on the grid: the gaps belong to it, not to any one page. */
+function attachGridReordering(grid, container) {
+  if (grid.dataset.reorderReady) return;
+  grid.dataset.reorderReady = 'true';
+
+  grid.addEventListener('dragover', (event) => {
+    // Only a page being moved, never a file dropped from outside the window.
+    if (event.dataTransfer.types.includes('Files')) return;
+    if (!event.dataTransfer.types.includes('text/plain')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+
+    const gap = pageGapUnderPointer(grid, event);
+    for (const cell of grid.querySelectorAll('.page-cell')) {
+      cell.classList.remove('drop-before', 'drop-after');
+    }
+    if (gap) gap.cell.classList.add(gap.edge === 'before' ? 'drop-before' : 'drop-after');
+  });
+
+  grid.addEventListener('dragleave', (event) => {
+    if (!grid.contains(event.relatedTarget)) clearPageMarkers();
+  });
+
+  grid.addEventListener('drop', (event) => {
+    if (event.dataTransfer.types.includes('Files')) return;
+    const raw = event.dataTransfer.getData('text/plain');
+    if (raw === '') return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const gap = pageGapUnderPointer(grid, event);
+    clearPageMarkers();
+    if (gap) movePage(Number(raw), gap.index, container);
+  });
+}
+
+/**
+ * Queue a reorder that moves one page into a gap.
+ *
+ * The order is expressed against the document as it stands after the enabled
+ * operations, since that is what the grid is showing and what the user is
+ * pointing at.
+ */
+function movePage(sourceIndex, gapIndex, container) {
+  if (!currentAsset) return;
+
+  const ops = operationsFor(currentAsset.id).map((op) => ({ type: op.type, params: op.params }));
+  const pages = previewPages(currentAsset.meta.pageCount, ops);
+
+  const from = pages.findIndex((p) => p.sourceIndex === sourceIndex);
+  if (from === -1) return;
+
+  const order = pages.map((_, i) => i);
+  const target = Math.max(0, Math.min(gapIndex > from ? gapIndex - 1 : gapIndex, order.length - 1));
+  if (target === from) return;
+
+  const [moved] = order.splice(from, 1);
+  order.splice(target, 0, moved);
+
+  pushOperation({
+    type: 'reorder_pages',
+    assetIds: currentAsset.id,
+    params: { order },
+    summary: `Move page ${from + 1} to position ${target + 1}`,
+    source: 'user',
+  });
 }
 
 /** Single source of truth for "this page is selected", used by every path. */

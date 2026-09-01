@@ -6,10 +6,13 @@
 // looked exactly like the grade being broken.
 
 import {
+  getState,
   listAssets,
   operationsFor,
   pushOperation,
+  removeAsset,
   removeOperation,
+  updateOperation,
 } from '../core/workspace.js';
 import { availableLuts, ensureLutLoaded, lutFor } from '../core/luts.js';
 import { applyLutToPixels } from '../core/lut-math.js';
@@ -59,7 +62,7 @@ export function init(elements) {
       const op = pushOperation({
         type: 'apply_lut',
         assetIds: listAssets('video').map((a) => a.id),
-        params: { lut_name: look, intensity: 1 },
+        params: { lut_name: look, intensity: Number(els.strength.value) / 100 },
         summary: `Grade ${scopeOf(listAssets('video'))} with the ${look} look`,
         source: 'user',
       });
@@ -68,19 +71,53 @@ export function init(elements) {
     for (const entry of clips.values()) entry.drawCurrentFrame();
   });
 
-  els.rotateLeft.addEventListener('click', () =>
-    queue('rotate_video', { degrees: 270 }, `Rotate ${scopeOf(listAssets('video'))} by 270°`),
-  );
-  els.rotateRight.addEventListener('click', () =>
-    queue('rotate_video', { degrees: 90 }, `Rotate ${scopeOf(listAssets('video'))} by 90°`),
-  );
-
-  els.orientation.addEventListener('change', () => {
-    const orientation = els.orientation.value;
-    if (!orientation) return;
-    queue('set_orientation', { orientation }, `Make ${scopeOf(listAssets('video'))} ${orientation}`);
-    els.orientation.value = '';
+  els.strength.addEventListener('input', () => {
+    const percent = Number(els.strength.value);
+    els.strengthValue.textContent = `${percent}%`;
+    if (!lookOpId) return;
+    const look = els.look.value;
+    updateOperation(lookOpId, {
+      params: { intensity: percent / 100 },
+      summary:
+        percent === 100
+          ? `Grade ${scopeOf(listAssets('video'))} with the ${look} look`
+          : `Grade ${scopeOf(listAssets('video'))} with the ${look} look at ${percent}%`,
+    });
+    for (const entry of clips.values()) entry.drawCurrentFrame();
   });
+
+  /**
+   * Rotation folds, as it does for stills: two lefts are a half turn, and
+   * turning back to square takes the change away.
+   */
+  let rotationOpId = null;
+  const turn = (delta) => {
+    const existing = getState().operations.find((op) => op.id === rotationOpId);
+    const total = (((existing?.params.degrees ?? 0) + delta) % 360 + 360) % 360;
+
+    if (total === 0) {
+      if (existing) removeOperation(existing.id);
+      rotationOpId = null;
+      return;
+    }
+    const summary = `Rotate ${scopeOf(listAssets('video'))} by ${total}°`;
+    if (existing) {
+      updateOperation(existing.id, { params: { degrees: total }, summary });
+      return;
+    }
+    const list = listAssets('video');
+    if (list.length === 0) return;
+    rotationOpId = pushOperation({
+      type: 'rotate_video',
+      assetIds: list.map((a) => a.id),
+      params: { degrees: total },
+      summary,
+      source: 'user',
+    }).id;
+  };
+
+  els.rotateLeft.addEventListener('click', () => turn(-90));
+  els.rotateRight.addEventListener('click', () => turn(90));
 }
 
 export function setThumbSize(px) {
@@ -154,6 +191,50 @@ function buildCell(asset) {
   fit.className = 'ghost';
   fit.textContent = 'Fit';
   fit.title = 'Reset zoom (scroll on the timeline to zoom)';
+
+  // The same two controls a photograph carries: look at it, or take it off.
+  const cellActions = document.createElement('div');
+  cellActions.className = 'cell-actions';
+
+  const enlarge = document.createElement('button');
+  enlarge.className = 'cell-button';
+  enlarge.type = 'button';
+  enlarge.title = `View ${asset.name}`;
+  enlarge.setAttribute('aria-label', `View ${asset.name}`);
+  enlarge.innerHTML =
+    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/>' +
+    '<path d="M10.5 7.5 v6 M7.5 10.5 h6"/></svg>';
+  enlarge.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const list = listAssets('video');
+    openViewer({
+      index: Math.max(0, list.findIndex((a) => a.id === asset.id)),
+      total: list.length,
+      caption: (i) => `${list[i]?.name ?? ''}  ·  ${i + 1} of ${list.length}`,
+      placeholder: (i) => list[i]?.meta.poster ?? '',
+      resolve: async (i) => list[i]?.meta.poster ?? '',
+    });
+  });
+
+  const removeClip = document.createElement('button');
+  removeClip.className = 'cell-button cell-remove';
+  removeClip.type = 'button';
+  removeClip.title = `Remove ${asset.name}`;
+  removeClip.setAttribute('aria-label', `Remove ${asset.name}`);
+  removeClip.textContent = '×';
+  removeClip.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const queued = operationsFor(asset.id).length;
+    const warning = queued
+      ? `Remove ${asset.name}? It has ${queued} change${queued === 1 ? '' : 's'} that will go with it.`
+      : `Remove ${asset.name} from the bench?`;
+    if (window.confirm(warning)) removeAsset(asset.id);
+  });
+
+  cellActions.append(enlarge, removeClip);
+  stage.append(cellActions);
 
   const times = buildTimeFields({
     duration: asset.meta.duration,

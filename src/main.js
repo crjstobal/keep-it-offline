@@ -64,7 +64,8 @@ videoPanel.init({
   look: document.getElementById('video-look'),
   rotateLeft: document.getElementById('video-rotate-left'),
   rotateRight: document.getElementById('video-rotate-right'),
-  orientation: document.getElementById('video-orientation'),
+  strength: document.getElementById('video-strength'),
+  strengthValue: document.getElementById('video-strength-value'),
 });
 
 imagePanel.init({
@@ -270,19 +271,46 @@ els.dropzone.addEventListener('keydown', (event) => {
 });
 els.fileInput.addEventListener('change', (event) => handleFiles(event.target.files));
 
-for (const type of ['dragenter', 'dragover']) {
-  els.dropzone.addEventListener(type, (event) => {
-    event.preventDefault();
-    els.dropzone.classList.add('is-over');
-  });
-}
-for (const type of ['dragleave', 'drop']) {
-  els.dropzone.addEventListener(type, (event) => {
-    event.preventDefault();
-    els.dropzone.classList.remove('is-over');
-  });
-}
-els.dropzone.addEventListener('drop', (event) => handleFiles(event.dataTransfer.files));
+/**
+ * The whole window accepts a drop.
+ *
+ * Aiming at a strip near the top is work the browser does not require: anywhere
+ * over the app means the same thing. The page dims to say so, which also makes
+ * the target obvious without one being drawn.
+ *
+ * Counting enter and leave events is what makes this reliable: moving over a
+ * child element fires a leave for the parent, so a naive listener flickers.
+ */
+let dragDepth = 0;
+
+const isFileDrag = (event) => event.dataTransfer?.types?.includes('Files');
+
+window.addEventListener('dragenter', (event) => {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  dragDepth++;
+  document.body.classList.add('is-file-dragging');
+});
+
+window.addEventListener('dragover', (event) => {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'copy';
+});
+
+window.addEventListener('dragleave', (event) => {
+  if (!isFileDrag(event)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) document.body.classList.remove('is-file-dragging');
+});
+
+window.addEventListener('drop', (event) => {
+  dragDepth = 0;
+  document.body.classList.remove('is-file-dragging');
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  handleFiles(event.dataTransfer.files);
+});
 
 // Sample files go through exactly the same path as a drop, so nothing about the
 // app knows or cares that they came from a button.
@@ -419,6 +447,27 @@ els.exportBtn.addEventListener('click', () => {
   exportAll().catch((error) => console.error('[keepitoffline] export failed', error));
 });
 
+/** Join several PDFs, applying each one's queued changes first. */
+async function mergePdfs(assetIds, name) {
+  const sources = assetIds
+    .map((id) => getAsset(id))
+    .filter(Boolean)
+    .map((asset) => ({
+      bytes: asset.bytes.slice(0),
+      operations: operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params })),
+    }));
+  if (sources.length < 2) return;
+
+  const { bytes } = await pdfCall('merge', { sources });
+  download(bytes, 'application/pdf', name || 'combined.pdf');
+}
+
+window.addEventListener('keepitoffline:merge', (event) => {
+  mergePdfs(event.detail.assetIds, event.detail.name).catch((error) =>
+    console.error('[keepitoffline] could not merge', error),
+  );
+});
+
 // Tools ask the UI to export rather than downloading behind the user's back.
 window.addEventListener('keepitoffline:export', (event) => exportAsset(event.detail.assetId));
 
@@ -454,10 +503,9 @@ function renderAssets(state) {
       : 'Your files stay on your computer.';
   }
   document.getElementById('start-over').hidden = !busy;
-  els.dropzone.classList.toggle('is-compact', busy);
-  els.dropzone.querySelector('.dropzone-main').textContent = busy
-    ? 'Drop more files here any time'
-    : 'Drop your files here';
+  // With the whole window taking drops, the strip is only needed while the
+  // bench is empty and there is nothing else to aim at.
+  els.dropzone.hidden = busy;
 
   // Files with no grid of their own still need a way off the bench.
   els.assetList.replaceChildren();
@@ -479,6 +527,25 @@ function renderAssets(state) {
 
     li.append(info, makeRemoveButton(asset));
     els.assetList.append(li);
+  }
+
+  // Joining is the reason documents keep a row of their own: it is the one
+  // action that is about the files rather than about the pages inside them.
+  const pdfs = state.assets.filter((a) => a.kind === 'pdf');
+  if (pdfs.length > 1) {
+    const merge = document.createElement('li');
+    merge.className = 'asset-action';
+    const button = document.createElement('button');
+    button.className = 'ghost';
+    button.type = 'button';
+    button.textContent = `Join ${pdfs.length} documents into one`;
+    button.addEventListener('click', () => {
+      mergePdfs(pdfs.map((a) => a.id), 'combined.pdf').catch((error) =>
+        console.error('[keepitoffline] could not merge', error),
+      );
+    });
+    merge.append(button);
+    els.assetList.append(merge);
   }
 }
 
