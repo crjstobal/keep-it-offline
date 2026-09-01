@@ -30,10 +30,14 @@ const SETS = [
   },
   {
     id: 'video',
-    label: 'A video clip',
-    detail: 'Something to trim, turn and grade',
+    label: 'Video clips',
+    detail: 'Three clips: one flat and ungraded, two shot vertically',
     icon: videoIcon,
-    files: [{ path: 'sample-clip.mp4', type: 'video/mp4' }],
+    files: [
+      { path: 'clip-alps.mp4', type: 'video/mp4' },
+      { path: 'clip-market.mp4', type: 'video/mp4' },
+      { path: 'clip-passport.mp4', type: 'video/mp4' },
+    ],
   },
   {
     id: 'audio',
