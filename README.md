@@ -60,10 +60,14 @@ agent processes a batch, and both see the same state change live.
 WebMCP requires a secure context. `localhost` counts as one.
 
 ```sh
-python3 -m http.server 8899
+python3 serve.py
 ```
 
 Then open http://localhost:8899.
+
+Use `serve.py` rather than `python3 -m http.server`: the built-in server lets the
+browser cache modules, so an edit can sit invisible behind a stale copy. This one
+sends the same no-cache policy the deployed site uses.
 
 To enable the API in Chrome, set `chrome://flags/#enable-webmcp-testing` to
 Enabled and restart. Chrome 149 or later.
@@ -131,7 +135,7 @@ node tools/gen-lut.mjs
 ## Tests
 
 ```sh
-python3 -m http.server 8899   # the browser tests need this
+python3 serve.py              # the browser tests need this
 cd test && npm install && node run-all.mjs
 ```
 

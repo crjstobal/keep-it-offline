@@ -1,0 +1,12 @@
+# The app is a handful of small files and it changes often. Serving stale
+# JavaScript to someone opening it for the first time is worse than the cost of
+# revalidating, so nothing is cached without checking.
+/*
+  Cache-Control: no-cache
+
+# The samples never change once published, so they can be cached hard.
+/demo-assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/luts/*
+  Cache-Control: public, max-age=31536000, immutable
