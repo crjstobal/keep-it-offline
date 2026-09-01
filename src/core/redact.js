@@ -245,3 +245,46 @@ export async function rasterisePages(bytes, redactions, scale = 2) {
 
   return rendered;
 }
+
+/**
+ * Which pages have nothing on them.
+ *
+ * Scanned documents and exported reports are full of these, and finding them by
+ * eye in a long file is exactly the tedium worth handing to a tool. A page
+ * counts as blank when it carries no text and almost no ink: rendering it small
+ * and checking how many pixels are not white catches both empty pages and pages
+ * holding only a faint header.
+ */
+export async function findBlankPages(bytes, { inkThreshold = 0.002 } = {}) {
+  const doc = await pdfjs.getDocument({ data: bytes.slice(0) }).promise;
+  const blank = [];
+
+  for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+    const page = await doc.getPage(pageNumber);
+
+    const content = await page.getTextContent();
+    const hasText = content.items.some((item) => item.str && item.str.trim().length > 0);
+    if (hasText) continue;
+
+    // No text is not enough: the page could be an image or a chart.
+    const viewport = page.getViewport({ scale: 0.2 });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil(viewport.width));
+    canvas.height = Math.max(1, Math.ceil(viewport.height));
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    let inked = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      // Anything clearly darker than paper counts as ink.
+      if (data[i] < 235 || data[i + 1] < 235 || data[i + 2] < 235) inked++;
+    }
+    const ratio = inked / (canvas.width * canvas.height);
+    if (ratio <= inkThreshold) blank.push(pageNumber);
+  }
+
+  return { blank, pageCount: doc.numPages };
+}

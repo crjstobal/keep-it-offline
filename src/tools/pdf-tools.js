@@ -8,7 +8,7 @@
 import { declareTool } from '../core/registry.js';
 import { getAsset, listAssets, operationsFor, pushOperation } from '../core/workspace.js';
 import { previewPages } from '../core/preview.js';
-import { findMatches, rasterisePages } from '../core/redact.js';
+import { findBlankPages, findMatches, rasterisePages } from '../core/redact.js';
 
 const hasPdf = (kinds) => kinds.has('pdf');
 
@@ -290,6 +290,57 @@ declareTool({
       });
 
       return `Queued redaction of ${total} match(es) across ${pages.length} page(s) of ${asset.name}. Those pages are flattened to images on export, so the text is removed rather than covered. The user can see the operation and undo it before exporting.`;
+    },
+  },
+});
+
+declareTool({
+  when: hasPdf,
+  definition: {
+    name: 'remove_blank_pages',
+    description:
+      'Find the pages with nothing on them and queue their removal. A page counts as blank ' +
+      'when it has no text and virtually no ink, so a page holding only a faint header is ' +
+      'caught but a chart or a photograph is not. Call with dry_run to see which pages ' +
+      'would go without queueing anything.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dry_run: {
+          type: 'boolean',
+          description: 'Report the blank pages without queueing a removal. Defaults to false.',
+        },
+        file_id: { type: 'string', description: 'Optional when only one PDF is loaded.' },
+      },
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ dry_run = false, file_id }) => {
+      const asset = resolvePdf(file_id);
+      const { blank, pageCount } = await findBlankPages(asset.bytes);
+
+      if (blank.length === 0) {
+        return `No blank pages in ${asset.name}: all ${pageCount} pages have something on them.`;
+      }
+      if (dry_run) {
+        return JSON.stringify({
+          file_id: asset.id,
+          blank_pages: blank,
+          page_count: pageCount,
+          note: 'Nothing was queued. Call again without dry_run to remove these.',
+        });
+      }
+      if (blank.length === pageCount) {
+        throw new Error('Every page is blank, and a PDF must keep at least one.');
+      }
+
+      pushOperation({
+        type: 'remove_pages',
+        assetIds: asset.id,
+        params: { pages: blank.map((n) => n - 1) },
+        summary: `Remove ${blank.length} blank page${blank.length === 1 ? '' : 's'}: ${blank.join(', ')}`,
+        source: 'agent',
+      });
+      return `Queued removal of ${blank.length} blank page(s) from ${asset.name}: pages ${blank.join(', ')}. ${pageCount - blank.length} pages will remain.`;
     },
   },
 });

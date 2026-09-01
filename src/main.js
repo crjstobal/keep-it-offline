@@ -8,6 +8,7 @@ import {
   operationsFor,
   removeAsset,
   removeOperation,
+  pushOperation,
   setOperationEnabled,
   subscribe,
   touch,
@@ -22,6 +23,7 @@ import * as grid from './ui/page-grid.js';
 import * as imagePanel from './ui/image-panel.js';
 import * as videoPanel from './ui/video-panel.js';
 import * as audioPanel from './ui/audio-panel.js';
+import * as demoLoader from './ui/demo-loader.js';
 
 import './tools/workspace-tools.js';
 import './tools/pdf-tools.js';
@@ -148,6 +150,29 @@ for (const [id, apply] of [
 }
 
 els.removeSelected.addEventListener('click', () => grid.removeSelected(els.gridHost));
+
+document.getElementById('remove-blank').addEventListener('click', async () => {
+  const pdf = getState().assets.find((a) => a.kind === 'pdf');
+  if (!pdf) return;
+  const { findBlankPages } = await import('./core/redact.js');
+  const { blank, pageCount } = await findBlankPages(pdf.bytes);
+
+  if (blank.length === 0) {
+    window.alert('No blank pages found.');
+    return;
+  }
+  if (blank.length === pageCount) {
+    window.alert('Every page is blank, and a PDF has to keep at least one.');
+    return;
+  }
+  pushOperation({
+    type: 'remove_pages',
+    assetIds: pdf.id,
+    params: { pages: blank.map((n) => n - 1) },
+    summary: `Remove ${blank.length} blank page${blank.length === 1 ? '' : 's'}: ${blank.join(', ')}`,
+    source: 'user',
+  });
+});
 els.rotateLeft.addEventListener('click', () => grid.rotateSelected(els.gridHost, 270));
 els.rotateRight.addEventListener('click', () => grid.rotateSelected(els.gridHost, 90));
 
@@ -241,6 +266,10 @@ for (const type of ['dragleave', 'drop']) {
   });
 }
 els.dropzone.addEventListener('drop', (event) => handleFiles(event.dataTransfer.files));
+
+// Sample files go through exactly the same path as a drop, so nothing about the
+// app knows or cares that they came from a button.
+demoLoader.init({ onLoad: (files) => handleFiles(files) });
 
 // --- Export ----------------------------------------------------------------
 
