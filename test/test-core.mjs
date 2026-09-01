@@ -76,5 +76,29 @@ check('updating merges rather than replacing params', ws.updateOperation(liveOp.
 check('updating an operation that is gone reports failure', ws.updateOperation('op_missing', { summary: 'x' }) === false);
 ws.removeAsset(liveAsset.id);
 
+// Reordering addresses a gap between files, which is what a drop marker draws.
+ws.clearOperations();
+for (const a of [...ws.listAssets()]) ws.removeAsset(a.id);
+const order = () => ws.listAssets().map(a => a.name).join(',');
+const a1 = ws.addAsset({ name: 'a', kind: 'image', bytes: new ArrayBuffer(1), meta: {} });
+const a2 = ws.addAsset({ name: 'b', kind: 'image', bytes: new ArrayBuffer(1), meta: {} });
+const a3 = ws.addAsset({ name: 'c', kind: 'image', bytes: new ArrayBuffer(1), meta: {} });
+check('files start in the order they arrived', order() === 'a,b,c', order());
+
+ws.moveAssetToIndex(a3.id, 0);
+check('moving to gap 0 puts a file first', order() === 'c,a,b', order());
+
+ws.moveAssetToIndex(a3.id, 3);
+check('moving to the last gap puts a file last', order() === 'a,b,c', order());
+
+ws.moveAssetToIndex(a1.id, 2);
+check('a move past itself accounts for the shift', order() === 'b,a,c', order());
+
+check('moving to where it already is changes nothing',
+      ws.moveAssetToIndex(a1.id, 1) === false && order() === 'b,a,c', order());
+check('moving something that is gone reports failure',
+      ws.moveAssetToIndex('image_missing', 0) === false);
+for (const a of [a1, a2, a3]) ws.removeAsset(a.id);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -3,6 +3,7 @@
 
 import {
   addAsset,
+  clearOperations,
   getAsset,
   getState,
   operationsFor,
@@ -142,6 +143,30 @@ for (const [id, apply] of [
 }
 
 els.removeSelected.addEventListener('click', () => grid.removeSelected(els.gridHost));
+
+// Two different retreats, kept apart on purpose. Undo all keeps the files and
+// drops the edits; Start over clears the bench entirely.
+document.getElementById('clear-changes').addEventListener('click', () => {
+  const count = getState().operations.length;
+  if (!count) return;
+  if (window.confirm(`Undo all ${count} change${count === 1 ? '' : 's'}? Your files stay where they are.`)) {
+    clearOperations();
+  }
+});
+
+document.getElementById('start-over').addEventListener('click', () => {
+  const state = getState();
+  if (state.assets.length === 0) return;
+  const files = state.assets.length;
+  const changes = state.operations.length;
+  const detail = changes
+    ? `${files} file${files === 1 ? '' : 's'} and ${changes} change${changes === 1 ? '' : 's'}`
+    : `${files} file${files === 1 ? '' : 's'}`;
+  if (window.confirm(`Start over? This clears ${detail} from the bench.`)) {
+    clearOperations();
+    for (const asset of [...state.assets]) removeAsset(asset.id);
+  }
+});
 
 document.getElementById('remove-blank').addEventListener('click', async () => {
   const pdf = getState().assets.find((a) => a.kind === 'pdf');
@@ -428,6 +453,7 @@ function renderAssets(state) {
       ? 'Your files'
       : 'Your files stay on your computer.';
   }
+  document.getElementById('start-over').hidden = !busy;
   els.dropzone.classList.toggle('is-compact', busy);
   els.dropzone.querySelector('.dropzone-main').textContent = busy
     ? 'Drop more files here any time'
@@ -477,6 +503,7 @@ export function makeRemoveButton(asset) {
 
 function renderOperations(state) {
   els.opList.replaceChildren();
+  document.getElementById('clear-changes').hidden = state.operations.length === 0;
 
   if (state.operations.length === 0) {
     const li = document.createElement('li');

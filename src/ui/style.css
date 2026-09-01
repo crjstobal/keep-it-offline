@@ -1339,3 +1339,128 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .promise-label { max-width: 340px; line-height: 1.25; }
+
+/* --- Tools rail, grouped ------------------------------------------------- */
+/* Fifteen controls in a single column is a wall. They divide into the things
+   people think of separately: how it looks, how big it is, what shape, and
+   what is drawn on top. */
+
+.rail-group {
+  gap: 0;
+  padding: 0;
+}
+.rail-group + .rail-group {
+  margin-top: 6px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.rail-group h3 { margin-bottom: 12px; }
+
+/* The bars inside a group are the subgroups: each gets its own breathing room
+   and a hairline between, so the eye can find where one idea ends. */
+.rail .actionbar,
+.rail .actionbar-secondary {
+  gap: 13px;
+  padding: 14px 0;
+}
+.rail .actionbar + .actionbar,
+.rail .actionbar + .actionbar-secondary,
+.rail .actionbar-secondary + .actionbar-secondary {
+  border-top: 1px solid var(--line-soft);
+}
+.rail .actionbar:first-of-type { padding-top: 0; }
+.rail .actionbar:last-of-type { padding-bottom: 2px; }
+
+/* Labelled rows read as label-then-control rather than as a run of words. */
+.rail .field {
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.rail .field > span:first-child,
+.rail .field:not(:has(select, input)) { color: var(--muted); }
+
+/* A slider needs room around it or the row reads as one grey smear. */
+.rail .field:has(input[type="range"]) { gap: 14px; }
+.rail .field input[type="range"] { min-width: 96px; }
+
+.rail .selection-count,
+.rail .hint-inline {
+  display: block;
+  padding: 2px 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.rail button { margin-top: 2px; }
+.rail .actionbar > button + button { margin-top: -5px; }
+
+/* --- Header -------------------------------------------------------------- */
+
+.topbar-end { display: flex; align-items: center; gap: 10px; }
+
+.promise {
+  margin: 0 auto;
+  padding: 9px 18px;
+}
+.promise-label { max-width: none; white-space: nowrap; }
+
+.start-over {
+  padding: 8px 14px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.start-over:hover { color: var(--danger); border-color: var(--danger); background: transparent; }
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.panel-head h2 { margin: 0; }
+
+.link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--accent-deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.link-button:hover { color: var(--accent); }
+
+/* --- Drop markers -------------------------------------------------------- */
+/* A line in the gap says where the picture will land. Highlighting a whole
+   cell instead reads as "replace that one", which is not what happens. */
+
+.image-cell { position: relative; }
+.image-cell.drop-before::before,
+.image-cell.drop-after::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.image-cell.drop-before::before { left: -9px; }
+.image-cell.drop-after::after { right: -9px; }
+
+/* Each bar announces what it governs, so the rail reads as a few ideas rather
+   than a column of controls. */
+.rail .actionbar[data-label]::before {
+  content: attr(data-label);
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}

@@ -18,13 +18,12 @@ const SETS = [
   {
     id: 'photos',
     label: 'Photographs',
-    detail: '5 shots, mixed orientations, a few of them turned the wrong way',
+    detail: '4 shots, mixed orientations, one turned the wrong way',
     icon: imageIcon,
     files: [
       { path: 'photo-market.jpg', type: 'image/jpeg' },
       { path: 'photo-harbour.jpg', type: 'image/jpeg' },
       { path: 'photo-cafe.jpg', type: 'image/jpeg' },
-      { path: 'photo-street.jpg', type: 'image/jpeg' },
       { path: 'photo-desk.jpg', type: 'image/jpeg' },
     ],
   },

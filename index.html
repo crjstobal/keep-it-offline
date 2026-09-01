@@ -31,13 +31,15 @@
         </svg>
         <h1>Keep It Offline</h1>
       </div>
-      <div class="promise" title="This is literal: the app makes no upload requests at all.">
-        <span class="promise-label">Nothing is uploaded. It all happens on your computer.</span>
-        <span class="promise-value" id="bytes-uploaded">0 bytes sent</span>
+      <div class="promise" title="Nothing is uploaded: the app makes no network requests with your files.">
+        <span class="promise-label">Nothing leaves your computer</span>
       </div>
-      <div class="agent-status" id="agent-status" hidden>
-        <span class="agent-dot" aria-hidden="true"></span>
-        <span id="agent-status-text">Agent ready</span>
+      <div class="topbar-end">
+        <div class="agent-status" id="agent-status" hidden>
+          <span class="agent-dot" aria-hidden="true"></span>
+          <span id="agent-status-text">Agent ready</span>
+        </div>
+        <button class="ghost start-over" id="start-over" hidden>Start over</button>
       </div>
     </header>
 
@@ -131,7 +133,7 @@
         </div>
 
         <div class="editor" id="image-editor" hidden>
-          <div class="actionbar">
+          <div class="actionbar" data-label="Colour">
             <span class="selection-count">Applies to every loaded image</span>
             <label class="field">
               Look
@@ -142,36 +144,6 @@
               <input type="range" id="look-strength" min="0" max="100" value="100" />
               <span id="look-strength-value">100%</span>
             </label>
-            
-            <span class="sep" aria-hidden="true"></span>
-            <label class="field">
-              Max width
-              <input type="number" id="resize-width" min="1" placeholder="2000" />
-            </label>
-            
-            <label class="field">
-              Format
-              <select id="format-select">
-                <option value="">Keep</option>
-                <option value="webp">WebP</option>
-                <option value="jpeg">JPEG</option>
-                <option value="png">PNG</option>
-              </select>
-            </label>
-            
-            <span class="sep" aria-hidden="true"></span>
-            <button class="ghost" id="image-rotate-left">Rotate ↺</button>
-            <button class="ghost" id="image-rotate-right">Rotate ↻</button>
-            <label class="field">
-              Shape
-              <select id="image-orientation">
-                <option value="">Keep</option>
-                <option value="portrait">All portrait</option>
-                <option value="landscape">All landscape</option>
-              </select>
-            </label>
-          </div>
-          <div class="actionbar actionbar-secondary">
             <label class="field">
               Brightness
               <input type="range" class="adj" id="adj-brightness" min="-100" max="100" value="0" />
@@ -188,36 +160,42 @@
               Vibrance
               <input type="range" class="adj" id="adj-vibrance" min="-100" max="100" value="0" />
             </label>
-            
-            <button class="ghost" id="reset-adjust">Reset</button>
-          </div>
-          <div class="actionbar actionbar-secondary">
             <label class="field">
               Vignette
-              <input type="range" id="adj-vignette" min="0" max="100" value="0" />
+              <input type="range" class="adj" id="adj-vignette" min="0" max="100" value="0" />
             </label>
-            
-            <span class="sep" aria-hidden="true"></span>
+            <button class="ghost" id="reset-adjust">Reset colour</button>
+          </div>
+
+          <div class="actionbar" data-label="Size and shape">
             <label class="field">
-              Watermark
-              <input type="text" id="watermark-text" placeholder="Your name" />
+              Max width
+              <input type="number" id="resize-width" min="1" placeholder="2000" />
             </label>
             <label class="field">
-              <select id="watermark-position">
-                <option value="bottom-right">Bottom right</option>
-                <option value="bottom-left">Bottom left</option>
-                <option value="bottom-center">Bottom centre</option>
-                <option value="center">Centre</option>
-                <option value="top-right">Top right</option>
-                <option value="top-left">Top left</option>
-                <option value="top-center">Top centre</option>
+              Format
+              <select id="format-select">
+                <option value="">Keep</option>
+                <option value="webp">WebP</option>
+                <option value="jpeg">JPEG</option>
+                <option value="png">PNG</option>
               </select>
             </label>
-            
-          </div>
-          <div class="actionbar actionbar-secondary">
             <label class="field">
-              Mask
+              Shape
+              <select id="image-orientation">
+                <option value="">Keep</option>
+                <option value="portrait">All portrait</option>
+                <option value="landscape">All landscape</option>
+              </select>
+            </label>
+            <button class="ghost" id="image-rotate-left">Rotate left</button>
+            <button class="ghost" id="image-rotate-right">Rotate right</button>
+          </div>
+
+          <div class="actionbar" data-label="Crop to a shape">
+            <label class="field">
+              Shape
               <select id="mask-shape">
                 <option value="">None</option>
                 <option value="circle">Circle</option>
@@ -230,26 +208,41 @@
               <input type="range" class="adj" id="mask-size" min="5" max="50" value="40" />
             </label>
             <label class="field">
-              X
+              Across
               <input type="range" class="adj" id="mask-x" min="0" max="100" value="50" />
             </label>
             <label class="field">
-              Y
+              Down
               <input type="range" class="adj" id="mask-y" min="0" max="100" value="50" />
             </label>
             <label class="field">
               Border
               <input type="range" class="adj" id="mask-border" min="0" max="50" value="0" />
+              <input type="color" id="mask-border-color" value="#ffffff"
+                     aria-label="Border colour" />
             </label>
-            <input type="color" id="mask-border-color" value="#ffffff"
-                   aria-label="Border colour" />
-            <button class="ghost" id="reshuffle-blob" hidden>Reshuffle</button>
-            
+            <button class="ghost" id="reshuffle-blob" hidden>New blob shape</button>
           </div>
-          <div class="actionbar actionbar-secondary">
-            <span class="hint-inline">Every change shows at once and lands on the right. Untick it there to undo it.</span>
-            <span class="sep" aria-hidden="true"></span>
+
+          <div class="actionbar" data-label="Watermark">
+            <label class="field">
+              Text
+              <input type="text" id="watermark-text" placeholder="Your name" />
+            </label>
+            <label class="field">
+              Where
+              <select id="watermark-position">
+                <option value="bottom-right">Bottom right</option>
+                <option value="bottom-left">Bottom left</option>
+                <option value="bottom-center">Bottom centre</option>
+                <option value="center">Centre</option>
+                <option value="top-right">Top right</option>
+                <option value="top-left">Top left</option>
+                <option value="top-center">Top centre</option>
+              </select>
+            </label>
           </div>
+
           <div class="worktools">
             <label class="zoom-control" title="Photo size">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
@@ -324,7 +317,10 @@
 
       <aside class="side">
         <section class="stack" aria-labelledby="stack-heading">
-          <h2 id="stack-heading">Changes so far</h2>
+          <div class="panel-head">
+            <h2 id="stack-heading">Changes so far</h2>
+            <button class="link-button" id="clear-changes" hidden>Undo all</button>
+          </div>
           <p class="hint">
             Nothing is written until you export. Untick any step to put it back the way it
             was, whether you or the agent added it.

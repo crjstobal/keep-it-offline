@@ -65,19 +65,24 @@ export function touch() {
 }
 
 /**
- * Move one file to sit where another one is.
+ * Move a file to a position in the list.
+ *
+ * The index is a gap between files rather than a file to land on, which is what
+ * a drop marker draws and what a person means by "put it here".
  *
  * Order decides what a contact sheet or a combined document looks like, so it
- * is part of the workspace rather than a detail of how the grid happens to be
- * drawn.
+ * is part of the workspace rather than a detail of how a grid is drawn.
  */
-export function moveAsset(draggedId, targetId) {
-  const from = state.assets.findIndex((a) => a.id === draggedId);
-  const to = state.assets.findIndex((a) => a.id === targetId);
-  if (from === -1 || to === -1 || from === to) return false;
+export function moveAssetToIndex(assetId, index) {
+  const from = state.assets.findIndex((a) => a.id === assetId);
+  if (from === -1) return false;
+
+  // Removing the file first shifts every later gap down by one.
+  const target = Math.max(0, Math.min(index > from ? index - 1 : index, state.assets.length - 1));
+  if (target === from) return false;
 
   const [moved] = state.assets.splice(from, 1);
-  state.assets.splice(to, 0, moved);
+  state.assets.splice(target, 0, moved);
   notify();
   return true;
 }

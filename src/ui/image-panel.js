@@ -8,7 +8,7 @@
 import {
   getState,
   listAssets,
-  moveAsset,
+  moveAssetToIndex,
   operationsFor,
   pushOperation,
   removeAsset,
@@ -327,6 +327,7 @@ export async function refresh(images) {
     for (const asset of images) {
       els.grid.append(buildCell(asset));
     }
+    attachGridReordering();
   }
 
   for (const asset of images) {
@@ -424,9 +425,13 @@ function buildCell(asset) {
 /**
  * Drag a photograph to move it.
  *
- * Order is not cosmetic: it decides what a contact sheet or a PDF built from
- * these would look like, so it belongs under the pointer rather than in a
- * setting somewhere.
+ * The drop lands *between* two photographs rather than on top of one: a line
+ * appears where it would go. Dropping onto a picture reads as "put it here,
+ * replacing that", which is not what happens, and leaves you guessing whether
+ * the moved item lands before or after.
+ *
+ * Order is not cosmetic: it decides what a contact sheet or a combined document
+ * would look like, so it belongs under the pointer.
  */
 function attachReordering(cell, asset) {
   cell.addEventListener('dragstart', (event) => {
@@ -435,30 +440,64 @@ function attachReordering(cell, asset) {
     cell.classList.add('is-dragging');
   });
 
-  cell.addEventListener('dragend', () => {
-    cell.classList.remove('is-dragging');
-    for (const other of els.grid.querySelectorAll('.image-cell')) {
-      other.classList.remove('is-drop-target');
-    }
-  });
+  cell.addEventListener('dragend', clearDropMarkers);
+}
 
-  cell.addEventListener('dragover', (event) => {
-    // Only accept a photograph being moved, never a file dropped from outside.
+/** Which gap the pointer is nearest, and where to draw the line. */
+function gapUnderPointer(event) {
+  const cells = [...els.grid.querySelectorAll('.image-cell:not(.is-dragging)')];
+  if (cells.length === 0) return null;
+
+  let best = null;
+  for (const [index, cell] of cells.entries()) {
+    const box = cell.getBoundingClientRect();
+    // Compare against both edges, so the last position in a row is reachable.
+    for (const [edge, x] of [['before', box.left], ['after', box.right]]) {
+      const distance = Math.hypot(x - event.clientX, box.top + box.height / 2 - event.clientY);
+      if (!best || distance < best.distance) {
+        best = { distance, cell, edge, index: edge === 'before' ? index : index + 1 };
+      }
+    }
+  }
+  return best;
+}
+
+function clearDropMarkers() {
+  for (const cell of els.grid.querySelectorAll('.image-cell')) {
+    cell.classList.remove('is-dragging', 'drop-before', 'drop-after');
+  }
+}
+
+/** One listener on the grid rather than one per cell: the gaps belong to it. */
+function attachGridReordering() {
+  if (els.grid.dataset.reorderReady) return;
+  els.grid.dataset.reorderReady = 'true';
+
+  els.grid.addEventListener('dragover', (event) => {
     if (!event.dataTransfer.types.includes('text/plain')) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    cell.classList.add('is-drop-target');
+
+    const gap = gapUnderPointer(event);
+    for (const cell of els.grid.querySelectorAll('.image-cell')) {
+      cell.classList.remove('drop-before', 'drop-after');
+    }
+    if (gap) gap.cell.classList.add(gap.edge === 'before' ? 'drop-before' : 'drop-after');
   });
 
-  cell.addEventListener('dragleave', () => cell.classList.remove('is-drop-target'));
+  els.grid.addEventListener('dragleave', (event) => {
+    if (!els.grid.contains(event.relatedTarget)) clearDropMarkers();
+  });
 
-  cell.addEventListener('drop', (event) => {
+  els.grid.addEventListener('drop', (event) => {
     const draggedId = event.dataTransfer.getData('text/plain');
-    cell.classList.remove('is-drop-target');
-    if (!draggedId || draggedId === asset.id) return;
+    if (!draggedId) return;
     event.preventDefault();
     event.stopPropagation();
-    moveAsset(draggedId, asset.id);
+
+    const gap = gapUnderPointer(event);
+    clearDropMarkers();
+    if (gap) moveAssetToIndex(draggedId, gap.index);
   });
 }
 
