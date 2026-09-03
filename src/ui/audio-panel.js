@@ -159,19 +159,16 @@ function buildRow(asset) {
     onCommit: (start, end) => {
       pending.set(asset.id, { start, end });
       timeline.setRange(start, end);
+      commitTrim(asset, start, end);
     },
   });
-
-  const trimButton = document.createElement('button');
-  trimButton.className = 'ghost';
-  trimButton.textContent = 'Trim to selection';
 
   const zoomOut = document.createElement('button');
   zoomOut.className = 'ghost';
   zoomOut.textContent = 'Fit';
   zoomOut.title = 'Reset zoom (scroll on the waveform to zoom)';
 
-  header.append(pick, play, name, meta, times.element, zoomOut, trimButton);
+  header.append(pick, play, name, meta, times.element, zoomOut);
 
   const timelineHost = document.createElement('div');
   timelineHost.className = 'timeline-host';
@@ -192,6 +189,7 @@ function buildRow(asset) {
       // Dragging the handles is the trim, and the boxes follow the picture.
       pending.set(asset.id, { start, end });
       times.show(start, end);
+      commitTrim(asset, start, end);
     },
     onScrub: (time) => {
       audio.currentTime = time;
@@ -234,18 +232,6 @@ function buildRow(asset) {
 
   zoomOut.addEventListener('click', () => timeline.resetZoom());
 
-  trimButton.addEventListener('click', () => {
-    const range = pending.get(asset.id) ?? timeline.getRange();
-    const list = listAssets('audio');
-    pushOperation({
-      type: 'trim_audio',
-      assetIds: [asset.id],
-      params: { start: range.start, end: range.end },
-      summary: `Trim ${asset.name} to ${range.start.toFixed(1)}s–${range.end.toFixed(1)}s`,
-      source: 'user',
-    });
-  });
-
   times.show(0, asset.meta.duration);
 
   tracks.set(asset.id, {
@@ -264,8 +250,51 @@ function buildRow(asset) {
   return row;
 }
 
-/** Handle positions while they are being dragged, before anything is queued. */
+/** Handle positions while they are being dragged. */
 const pending = new Map();
+
+/**
+ * A trim, committed as it is made.
+ *
+ * Dragging a handle *is* the instruction, so it goes onto the stack at once and
+ * the stack is where it is seen and undone. A "Trim to selection" button in
+ * between only asked people to confirm what they had just said with their
+ * hands, and every other control here already works this way.
+ *
+ * A drag fires continuously, so each track keeps one row and rewrites it as the
+ * handles move: one change, one undo, wherever the pointer ended up. Pulling
+ * the handles back to the full length is not a trim at all, and takes the row
+ * away again.
+ */
+const trimRows = new Map();
+function commitTrim(asset, start, end) {
+  const full = start <= 0.001 && end >= asset.meta.duration - 0.001;
+  const existing = trimRows.get(asset.id);
+  const live = existing && getState().operations.some((op) => op.id === existing);
+
+  if (full) {
+    if (live) removeOperation(existing);
+    trimRows.delete(asset.id);
+    return;
+  }
+
+  const params = { start, end };
+  const summary = `Trim ${asset.name} to ${start.toFixed(1)}s–${end.toFixed(1)}s`;
+  if (live) {
+    updateOperation(existing, { params, summary });
+    return;
+  }
+  trimRows.set(
+    asset.id,
+    pushOperation({
+      type: 'trim_audio',
+      assetIds: [asset.id],
+      params,
+      summary,
+      source: 'user',
+    }).id,
+  );
+}
 
 const playIcon = () =>
   '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">' +

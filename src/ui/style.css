@@ -1392,6 +1392,10 @@ input[type="range"]::-moz-range-thumb {
   gap: 10px;
   margin-bottom: 10px;
 }
+/* Flex on the element outranks the hidden attribute, and the zoom sliders are
+   parked in one slot: without this, the one belonging to a grid that is no
+   longer on screen stays visible next to the current one. */
+.worktools[hidden] { display: none; }
 .zoom-control {
   display: flex;
   align-items: center;

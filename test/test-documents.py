@@ -138,6 +138,13 @@ with sync_playwright() as pw:
         "sample.pdf" in rows[0] and "sensitive.pdf" in rows[0],
         str(rows),
     )
+    # The drag did two things, so the row accounts for both: a row that only
+    # said "join" left the page move invisible on the stack.
+    check(
+        "and it says the page was moved, not just that they were joined",
+        "Move" in rows[0] and "position" in rows[0],
+        str(rows),
+    )
 
     order = p.eval_on_selector_all(".page-cell", "e => e.map(c => Number(c.dataset.index))")
     check("the dragged page is first", order[0] == 0, str(order))

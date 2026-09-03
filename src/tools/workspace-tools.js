@@ -5,6 +5,7 @@ import { declareTool } from '../core/registry.js';
 import {
   clearSelection,
   getState,
+  isJoinProduct,
   isSelected,
   listAssets,
   operationsFor,
@@ -168,8 +169,12 @@ declareTool({
       const asset = file_id ? assets.find((a) => a.id === file_id) : assets[0];
       if (!asset) throw new Error(`No file with id "${file_id}".`);
 
+      // A document produced by a join already carries its changes in its bytes,
+      // so it is exportable with an empty stack. Only a file that is both
+      // untouched and unqueued has nothing to give.
       const ops = operationsFor(asset.id);
-      if (ops.length === 0) {
+      const baked = isJoinProduct(asset.id);
+      if (ops.length === 0 && !baked) {
         return `${asset.name} has no enabled operations, so there is nothing to apply.`;
       }
 
@@ -178,7 +183,9 @@ declareTool({
       window.dispatchEvent(
         new CustomEvent('keepitoffline:export', { detail: { assetId: asset.id } }),
       );
-      return `Applying ${ops.length} operation(s) to ${asset.name} and preparing the download. Nothing left the browser.`;
+      return ops.length === 0
+        ? `Preparing the download for ${asset.name}, which already carries the changes that were joined into it. Nothing left the browser.`
+        : `Applying ${ops.length} operation(s) to ${asset.name} and preparing the download. Nothing left the browser.`;
     },
   },
 });

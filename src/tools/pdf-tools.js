@@ -355,7 +355,8 @@ declareTool({
       'are gone before it is appended. Call describe_workspace first to get the file ids. ' +
       'Like every other change this is queued, not written: the combined document ' +
       'appears on the bench and the user can undo the join to get their separate ' +
-      'files back. Nothing is downloaded until they ask for it.',
+      'files back. Nothing is downloaded unless you pass download: true, which you ' +
+      'should do when the user asked to merge and save the result in one go.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -368,10 +369,18 @@ declareTool({
             'loaded PDF in the order they are on the bench.',
         },
         name: { type: 'string', description: 'Name for the combined file.' },
+        download: {
+          type: 'boolean',
+          description:
+            'Save the combined document to the user\'s computer as well as putting it on ' +
+            'the bench. Pass true when they asked to merge *and* download, or to save or ' +
+            'export the result; otherwise the join is queued like any other change and ' +
+            'they export when they are ready.',
+        },
       },
     },
     annotations: { readOnlyHint: false },
-    execute: async ({ file_ids, name }) => {
+    execute: async ({ file_ids, name, download }) => {
       const pdfs = listAssets('pdf');
       if (pdfs.length < 2) {
         throw new Error('Merging needs at least two PDFs on the bench.');
@@ -389,12 +398,15 @@ declareTool({
 
       window.dispatchEvent(
         new CustomEvent('keepitoffline:merge', {
-          detail: { assetIds: chosen.map((a) => a.id), name },
+          detail: { assetIds: chosen.map((a) => a.id), name, download: download === true },
         }),
       );
 
       const total = chosen.reduce((n, a) => n + a.meta.pageCount, 0);
-      return `Queued a join of ${chosen.length} PDFs (about ${total} pages before any queued removals). The combined document is on the bench and the user can undo the join to get the separate files back. Nothing left the browser.`;
+      const joined = `Queued a join of ${chosen.length} PDFs (about ${total} pages before any queued removals). The combined document is on the bench and the user can undo the join to get the separate files back.`;
+      return download === true
+        ? `${joined} The download is being prepared too. Nothing left the browser.`
+        : `${joined} Nothing is downloaded until the user asks for it, so call apply_and_export if they wanted a file. Nothing left the browser.`;
     },
   },
 });

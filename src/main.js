@@ -284,10 +284,21 @@ function blackoutSpec() {
  * the first would redact a document the user was not looking at.
  */
 function blackoutTarget() {
+  // A picked document is the plainest answer, and it is the one the rest of the
+  // app already uses: picking files out is how every other control is narrowed,
+  // so this panel has to honour it too rather than insisting on a ticked page.
+  const picked = selectedAssets('pdf');
+  if (picked.length === 1) return picked[0];
+  if (picked.length > 1) {
+    blackout.status.textContent =
+      `${picked.length} documents are picked. Black out works on one at a time, so pick just one.`;
+    return null;
+  }
+
   const asset = grid.getCurrentAsset();
   if (asset) return asset;
   blackout.status.textContent =
-    'Several documents are loaded. Tick a page of the one you mean first.';
+    'Several documents are loaded. Pick the one you mean, or tick a page of it, first.';
   return null;
 }
 
@@ -666,7 +677,7 @@ els.exportBtn.addEventListener('click', () => {
  * out in it, and only then save a copy. It also means the two documents stop
  * being two on screen, which is what joining them was for.
  */
-async function mergePdfs(assetIds, name, { order } = {}) {
+async function mergePdfs(assetIds, name, { order, note } = {}) {
   const assets = assetIds.map((id) => getAsset(id)).filter(Boolean);
   if (assets.length < 2) return null;
 
@@ -681,8 +692,14 @@ async function mergePdfs(assetIds, name, { order } = {}) {
     kind: 'pdf',
     bytes,
     // Marked as made rather than opened, so the workspace knows it has no life
-    // of its own once the join that produced it is gone.
-    meta: { pageCount, joined: true },
+    // of its own once the join that produced it is gone. builtFrom records the
+    // source operations these bytes were built from, so rebuildJoins can tell
+    // whether they are still current.
+    meta: {
+      pageCount,
+      joined: true,
+      builtFrom: JSON.stringify(sources.map((s) => s.operations)),
+    },
   });
 
   // The sources stay on the bench, hidden behind the join rather than deleted.
@@ -690,18 +707,86 @@ async function mergePdfs(assetIds, name, { order } = {}) {
   // back, each with the edits that were queued against it.
   pushOperation({
     type: 'join',
-    params: { sources: assets.map((a) => a.id), merged: merged.id },
-    summary: `Join ${assets.map((a) => a.name).join(' and ')} into one document`,
+    // The order is kept so the join can be rebuilt when a source's own changes
+    // are edited afterwards: without it a rebuild would lose a page that had
+    // been dragged from one half into the other.
+    params: { sources: assets.map((a) => a.id), merged: merged.id, order },
+    // A join that was really "put this page there" says so: the drag did two
+    // things and the row has to account for both, or the move is invisible on
+    // the stack and only the join looks undoable.
+    summary: note
+      ? `${note}, joining ${assets.map((a) => a.name).join(' and ')}`
+      : `Join ${assets.map((a) => a.name).join(' and ')} into one document`,
     source: 'user',
   });
   return merged;
 }
 
 window.addEventListener('keepitoffline:merge', (event) => {
-  mergePdfs(event.detail.assetIds, event.detail.name).catch((error) =>
-    console.error('[keepitoffline] could not merge', error),
-  );
+  mergePdfs(event.detail.assetIds, event.detail.name)
+    .then((merged) => {
+      // "Merge and download" is one request, so it is one action here too:
+      // asking for a file and then being handed nothing is the worst of both.
+      if (merged && event.detail.download) return exportAsset(merged.id);
+    })
+    .catch((error) => console.error('[keepitoffline] could not merge', error));
 });
+
+/**
+ * Rebuild a combined document when the changes inside one of its halves move.
+ *
+ * A join bakes its sources' edits into new bytes, which is what makes the
+ * result a real document you can keep working on. The cost is that those bytes
+ * are a snapshot: unticking a redaction that happened before the join used to
+ * leave the row looking undone while the black bars stayed burned into the
+ * combined file. The row was telling the truth about the source and a lie about
+ * what was on screen.
+ *
+ * So the join is recomputed whenever the operations feeding it change. The
+ * merged asset keeps its id, so the stack, the selection and the grid all stay
+ * pointing at the same document.
+ */
+let rebuilding = false;
+async function rebuildJoins() {
+  if (rebuilding) return;
+  const joins = getState().operations.filter((op) => op.type === 'join' && op.enabled);
+  if (joins.length === 0) return;
+
+  rebuilding = true;
+  try {
+    for (const join of joins) {
+      const merged = getAsset(join.params.merged);
+      if (!merged) continue;
+
+      const sources = join.params.sources
+        .map((id) => getAsset(id))
+        .filter(Boolean)
+        .map((asset) => ({
+          bytes: asset.bytes.slice(0),
+          operations: operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params })),
+        }));
+      if (sources.length < 2) continue;
+
+      // The fingerprint is what the join is made of: rebuild only when it moves,
+      // or every render would re-run the merge and the app would never settle.
+      const fingerprint = JSON.stringify(sources.map((s) => s.operations));
+      if (merged.meta.builtFrom === fingerprint) continue;
+
+      const { bytes, pageCount } = await pdfCall('merge', {
+        sources,
+        order: join.params.order,
+      });
+      merged.bytes = bytes;
+      merged.meta.pageCount = pageCount;
+      merged.meta.builtFrom = fingerprint;
+      touch();
+    }
+  } catch (error) {
+    console.error('[keepitoffline] could not rebuild a join', error);
+  } finally {
+    rebuilding = false;
+  }
+}
 
 /**
  * A page dragged from one document into another.
@@ -751,8 +836,16 @@ async function mixPages({ fromAssetId, sourceIndex, intoAssetId, atIndex }) {
   }
 
   // The page lands in place as part of the join rather than as a second step,
-  // so the whole gesture is one row on the stack and one thing to undo.
-  await mergePdfs(order, combinedName(order.map(getAsset)), { order: pageOrder });
+  // so the whole gesture is one row on the stack and one thing to undo. The row
+  // still names the move, in the numbering of the document you end up with,
+  // because "join" alone does not describe what the drag did.
+  const landedAt = pageOrder ? pageOrder.indexOf(movedFrom) : -1;
+  const note =
+    landedAt >= 0
+      ? `Move ${from.name} page ${inFrom + 1} to position ${landedAt + 1}`
+      : undefined;
+
+  await mergePdfs(order, combinedName(order.map(getAsset)), { order: pageOrder, note });
 }
 
 /**
@@ -834,9 +927,12 @@ function renderAssets(state) {
   if (wanted) {
     wanted.dataset.editor = editorId;
     if (wanted.parentElement !== zoomSlot) zoomSlot.append(wanted);
-    // Only the one that belongs to the visible grid is shown.
-    for (const child of zoomSlot.children) child.hidden = child !== wanted;
   }
+  // Only the one belonging to the visible grid is shown, and this runs whether
+  // or not there is a wanted one: the sliders are parked here for later reuse,
+  // so leaving a stale flag behind means two of them appear side by side the
+  // next time the slot opens.
+  for (const child of zoomSlot.children) child.hidden = child !== wanted;
   zoomSlot.hidden = !wanted;
   // With the whole window taking drops, the strip is only needed while the
   // bench is empty and there is nothing else to aim at. The sample offer under
@@ -1102,6 +1198,11 @@ subscribe((state) => {
   renderOperations(state);
   renderScopes();
   layoutRail(state);
+
+  // A combined document is built from its halves, so it has to follow them when
+  // their changes move. This is a no-op unless a join's inputs actually
+  // changed, and it notifies again when it rebuilds, which redraws the grid.
+  rebuildJoins();
 
   // Show the first PDF in the editor, and keep the grid in step with the stack
   // so a page removed by the agent greys out as soon as the tool returns.

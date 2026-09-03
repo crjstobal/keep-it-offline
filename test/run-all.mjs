@@ -27,6 +27,7 @@ const BROWSER_TESTS = [
   'test-audio.py',
   'test-redaction.py',
   'test-documents.py',
+  'test-merge.py',
   'test-mask.py',
   'test-selection.py',
 ];

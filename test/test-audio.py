@@ -77,10 +77,12 @@ with sync_playwright() as pw:
     p.mouse.up()
     p.wait_for_timeout(400)
 
-    p.click("text=Trim to selection")
-    p.wait_for_timeout(800)
-    check("dragging the handles and trimming queues an operation",
+    # No button to press: the drag itself is the instruction, so the row is
+    # already on the stack by the time the handles are let go.
+    check("dragging the handles queues the trim on its own",
           p.locator(".op").count() == 2, f"{p.locator('.op').count()} ops")
+    check("and there is no button asking to confirm it",
+          p.get_by_text("Trim to selection").count() == 0)
     summary = p.locator(".op-summary").last.inner_text()
     check("the trim covers roughly the dragged range",
           "1." in summary or "0.9" in summary, summary)

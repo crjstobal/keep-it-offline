@@ -199,7 +199,7 @@ exporting a clip and confirming with ffprobe that a one-second trim really lasts
 one second. One suite watches every network request from load to export and fails
 if any of them leaves this origin.
 
-366 checks across 17 suites.
+440 checks across 19 suites.
 
 ## Licence
 

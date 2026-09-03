@@ -113,6 +113,19 @@ with sync_playwright() as pw:
         const { clearOperations } = await import('./src/core/workspace.js');
         clearOperations();
     }""")
+
+    # The PDF loaded above owns the zoom slot while it is on the bench, and only
+    # one slider is shown at a time, so it goes before the photo zoom can be
+    # reached again. Two sliders side by side was a bug, not a feature.
+    p.evaluate("""async () => {
+        const { getState, removeAsset } = await import('./src/core/workspace.js');
+        for (const a of getState().assets.filter(a => a.kind === 'pdf')) removeAsset(a.id);
+    }""")
+    p.wait_for_timeout(1200)
+    check("only one zoom slider is ever on screen",
+          p.locator("#bench-zoom .zoom-control:visible").count() == 1,
+          f"{p.locator('#bench-zoom .zoom-control:visible').count()} visible")
+
     p.locator("#image-thumb-size").fill("140")
     p.wait_for_timeout(2500)
 

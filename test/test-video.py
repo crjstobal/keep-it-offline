@@ -50,10 +50,12 @@ with sync_playwright() as pw:
     p.mouse.move(box["x"] + box["width"]*0.5, eb["y"] + eb["height"]/2, steps=8)
     p.mouse.up()
     p.wait_for_timeout(400)
-    p.click("text=Trim to selection")
-    p.wait_for_timeout(600)
-    check("dragging a handle and trimming queues an operation",
+    # No button to press: the drag is the instruction, so the row is on the
+    # stack as soon as the handle is let go.
+    check("dragging a handle queues the trim on its own",
           p.locator(".op").count() == 2, f"{p.locator('.op').count()} ops")
+    check("and there is no button asking to confirm it",
+          p.get_by_text("Trim to selection").count() == 0)
 
     # And the trim has to reach the file. Everything is cleared and a known trim
     # queued, so the measurement is of the trim alone rather than of whatever
