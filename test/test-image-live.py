@@ -217,6 +217,12 @@ with sync_playwright() as pw:
     check("undo appears once there is a change", p.locator("#undo-last").is_visible(),
           str(before))
 
+    # The two ways back sit together beside the name, not at opposite ends of
+    # the header: they are the same kind of decision at different sizes.
+    check("undo sits beside start over",
+          p.locator(".topbar-back #undo-last").count() == 1
+          and p.locator(".topbar-back #start-over").count() == 1)
+
     # It takes back the newest change, and does not stop to ask.
     p.click("#undo-last"); p.wait_for_timeout(1500)
     check("undo removes exactly one row", rows() == before - 1, f"{before} -> {rows()}")

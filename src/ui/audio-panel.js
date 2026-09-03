@@ -5,11 +5,15 @@
 // too, so what you hear is what the export will produce.
 
 import {
+  describeTarget,
   getState,
+  isSelected,
   listAssets,
   operationsFor,
   pushOperation,
   removeOperation,
+  targetFor,
+  toggleSelected,
   updateOperation,
 } from '../core/workspace.js';
 import { plan } from '../core/audio.js';
@@ -20,15 +24,13 @@ let els = {};
 /** Per-track playback and timeline state, keyed by asset id. */
 const tracks = new Map();
 
-// Whole-track controls cover the tracks as a set, so the row must not freeze a
-// count that a later drop would make wrong.
-const scopeOf = (list) => (list.length === 1 ? list[0].name : 'every track');
+// Whole-track controls cover the tracks as a set unless tracks have been picked
+// out, so the row must not freeze a count that a later drop would make wrong.
+const TRACK_WORDS = { one: 'track', many: 'tracks', all: 'every track' };
+const scopeOfTracks = (target = targetFor('audio')) => describeTarget(target, TRACK_WORDS);
 
-function queue(type, params, summary) {
-  const list = listAssets('audio');
-  if (list.length === 0) return;
-  pushOperation({ type, scope: 'audio', params, summary, source: 'user' });
-}
+/** Which tracks a row was pushed for, so a changed selection starts a new one. */
+const targetKey = (target) => (target.scope ? 'all' : target.assetIds.join(','));
 
 export function init(elements) {
   els = elements;
@@ -36,33 +38,48 @@ export function init(elements) {
   // The slider owns one row on the stack and rewrites it as it moves: dragging
   // through a dozen speeds should leave one change behind, not a dozen.
   let speedOpId = null;
+  let speedTarget = null;
 
   els.speed.addEventListener('input', () => {
     const rate = Number(els.speed.value) / 100;
     els.speedValue.textContent = `${rate.toFixed(2)}×`;
 
-    // Anything playing follows the slider, so the change is heard as it is chosen.
-    for (const entry of tracks.values()) entry.audio.playbackRate = rate;
+    const target = targetFor('audio');
 
-    const summary = `Play ${scopeOf(listAssets('audio'))} at ${rate}×`;
+    // Anything playing follows the slider, so the change is heard as it is
+    // chosen, but only the tracks the slider would actually act on.
+    const covered = new Set(target.assets.map((a) => a.id));
+    for (const [id, entry] of tracks) {
+      if (covered.has(id)) entry.audio.playbackRate = rate;
+    }
+
     if (rate === 1) {
       if (speedOpId) removeOperation(speedOpId);
       speedOpId = null;
+      speedTarget = null;
       return;
     }
-    if (speedOpId && getState().operations.some((op) => op.id === speedOpId)) {
+    if (target.assets.length === 0) return;
+
+    const wanted = targetKey(target);
+    const summary = `Play ${scopeOfTracks(target)} at ${rate}×`;
+    if (
+      speedOpId &&
+      speedTarget === wanted &&
+      getState().operations.some((op) => op.id === speedOpId)
+    ) {
       updateOperation(speedOpId, { params: { rate }, summary });
       return;
     }
-    const list = listAssets('audio');
-    if (list.length === 0) return;
     speedOpId = pushOperation({
       type: 'change_speed',
-      scope: 'audio',
+      scope: target.scope,
+      assetIds: target.assetIds,
       params: { rate },
       summary,
       source: 'user',
     }).id;
+    speedTarget = wanted;
   });
 }
 
@@ -87,6 +104,16 @@ export function refresh(list) {
     const entry = tracks.get(asset.id);
     if (!entry) continue;
 
+    const row = els.list.querySelector(`[data-asset-id="${asset.id}"]`);
+    const picked = isSelected(asset.id);
+    row?.classList.toggle('is-picked', picked);
+    const pick = row?.querySelector('.row-pick');
+    if (pick) {
+      pick.checked = picked;
+      pick.title = picked ? `Deselect ${asset.name}` : `Select ${asset.name}`;
+      pick.setAttribute('aria-label', pick.title);
+    }
+
     const ops = operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params }));
     const output = plan(asset.meta, ops);
 
@@ -108,6 +135,12 @@ function buildRow(asset) {
 
   const header = document.createElement('div');
   header.className = 'audio-header';
+
+  // A track has no picture to tick the corner of, so the box leads the row.
+  const pick = document.createElement('input');
+  pick.type = 'checkbox';
+  pick.className = 'row-pick';
+  pick.addEventListener('change', () => toggleSelected(asset.id));
 
   const play = document.createElement('button');
   play.className = 'ghost play-button';
@@ -138,7 +171,7 @@ function buildRow(asset) {
   zoomOut.textContent = 'Fit';
   zoomOut.title = 'Reset zoom (scroll on the waveform to zoom)';
 
-  header.append(play, name, meta, times.element, zoomOut, trimButton);
+  header.append(pick, play, name, meta, times.element, zoomOut, trimButton);
 
   const timelineHost = document.createElement('div');
   timelineHost.className = 'timeline-host';

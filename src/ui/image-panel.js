@@ -6,13 +6,19 @@
 // on screen.
 
 import {
+  clearSelection,
+  describeTarget,
   getState,
+  isSelected,
   listAssets,
   moveAssetToIndex,
   operationsFor,
   pushOperation,
   removeAsset,
   removeOperation,
+  setSelection,
+  targetFor,
+  toggleSelected,
   updateOperation,
 } from '../core/workspace.js';
 import { availableLuts, ensureLutLoaded } from '../core/luts.js';
@@ -20,6 +26,9 @@ import { imageCall } from '../core/worker-bridge.js';
 import { openViewer } from './viewer.js';
 
 let els = {};
+
+const PHOTO_WORDS = { one: 'photo', many: 'photos', all: 'every photo' };
+
 /** Object URLs currently on screen, revoked before being replaced. */
 const previewUrls = new Map();
 /** Full-resolution renders for the enlarged viewer, keyed by asset id. */
@@ -27,6 +36,30 @@ const fullUrls = new Map();
 
 /** Guards against overlapping preview renders when the slider is dragged. */
 let previewToken = 0;
+
+/** Anchor for shift-clicking a run of photographs. */
+let lastPicked = null;
+
+/**
+ * Select everything between the last picked photograph and this one.
+ *
+ * Without an anchor there is no run to take, so this behaves as a plain click.
+ */
+function extendSelection(assetId) {
+  const images = listAssets('image');
+  const to = images.findIndex((a) => a.id === assetId);
+  const from = images.findIndex((a) => a.id === lastPicked);
+  if (to === -1 || from === -1) {
+    toggleSelected(assetId);
+    lastPicked = assetId;
+    return;
+  }
+  const [start, end] = from < to ? [from, to] : [to, from];
+  const run = images.slice(start, end + 1).map((a) => a.id);
+  // Added to what is already picked rather than replacing it, so several runs
+  // can be gathered up.
+  setSelection([...images.filter((a) => isSelected(a.id)).map((a) => a.id), ...run], 'image');
+}
 
 export function init(elements) {
   els = elements;
@@ -44,12 +77,13 @@ export function init(elements) {
     els.lookSelect.append(option);
   }
 
-  // These controls cover the photographs as a set, not a fixed list, so the row
-  // must not freeze a count that a later drop would make wrong.
-  const scopeOfImages = () => {
-    const images = listAssets('image');
-    return images.length === 1 ? images[0].name : 'every photo';
-  };
+  // What the next control will act on, said the way a person would say it.
+  //
+  // With nothing picked out these controls cover the photographs as a set, not a
+  // fixed list, so the row must not freeze a count that a later drop would make
+  // wrong. With a selection the row names what was picked, because that is the
+  // part worth checking later.
+  const scopeOfImages = (target = targetFor('image')) => describeTarget(target, PHOTO_WORDS);
 
   /**
    * Push an operation, or edit the one this control already owns.
@@ -64,29 +98,45 @@ export function init(elements) {
    * one row and rewrites it as it moves.
    */
   const live = new Map();
-  function commit(key, { type, params, summary }) {
-    const images = listAssets('image');
-    if (images.length === 0) return;
 
+  /** Which files a row was pushed for, so a changed selection starts a new one. */
+  const liveTargets = new Map();
+  const targetKey = (target) => (target.scope ? 'all' : target.assetIds.join(','));
+
+  function commit(key, { type, params, summary }) {
+    const target = targetFor('image');
+    if (target.assets.length === 0) return;
+
+    // A row records what it was applied to. Once the selection moves the old row
+    // is finished: rewriting it would silently redirect a change the user can
+    // see on the stack to a different set of photographs.
+    const wanted = targetKey(target);
     const existing = live.get(key);
-    if (existing && getState().operations.some((op) => op.id === existing)) {
+    if (
+      existing &&
+      liveTargets.get(key) === wanted &&
+      getState().operations.some((op) => op.id === existing)
+    ) {
       updateOperation(existing, { params, summary });
       return;
     }
     const op = pushOperation({
       type,
-      scope: 'image',
+      scope: target.scope,
+      assetIds: target.assetIds,
       params,
       summary,
       source: 'user',
     });
     live.set(key, op.id);
+    liveTargets.set(key, wanted);
   }
 
   /** A control that has been returned to neutral owns no row any more. */
   function release(key) {
     const id = live.get(key);
     live.delete(key);
+    liveTargets.delete(key);
     if (id) removeOperation(id);
   }
 
@@ -110,8 +160,10 @@ export function init(elements) {
 
   els.lookSelect.addEventListener('change', () => {
     // A new look starts its own row rather than rewriting the last one, so two
-    // looks can be stacked.
-    live.delete('look');
+    // looks can be stacked. Going back to "No look" is not a new look, though:
+    // it cancels the one this control put there, the way rotating back to
+    // square takes the rotation away rather than recording a third turn.
+    if (els.lookSelect.value) live.delete('look');
     applyLook();
   });
   els.lookStrength.addEventListener('input', () => {
@@ -222,10 +274,17 @@ export function init(elements) {
   // --- Rotation -----------------------------------------------------------
   // A turn is a discrete act, so each press is its own row: pressing twice
   // means two quarter turns, not one row rewritten.
-  const queueForAll = (type, params, summary) => {
-    const images = listAssets('image');
-    if (images.length === 0) return;
-    pushOperation({ type, scope: 'image', params, summary, source: 'user' });
+  const queueForTarget = (type, params, summary) => {
+    const target = targetFor('image');
+    if (target.assets.length === 0) return;
+    pushOperation({
+      type,
+      scope: target.scope,
+      assetIds: target.assetIds,
+      params,
+      summary,
+      source: 'user',
+    });
   };
 
   /**
@@ -236,13 +295,24 @@ export function init(elements) {
    * what happened longer than what actually happened.
    */
   let rotationOpId = null;
+  let rotationTarget = null;
   const turn = (delta) => {
-    const existing = getState().operations.find((op) => op.id === rotationOpId);
+    const target = targetFor('image');
+    if (target.assets.length === 0) return;
+
+    // Folding only applies while the turns are about the same photographs.
+    // Turning two, then selecting two others and turning those, is two changes.
+    const wanted = targetKey(target);
+    const existing =
+      rotationTarget === wanted
+        ? getState().operations.find((op) => op.id === rotationOpId)
+        : undefined;
     const total = (((existing?.params.degrees ?? 0) + delta) % 360 + 360) % 360;
 
     if (total === 0) {
       if (existing) removeOperation(existing.id);
       rotationOpId = null;
+      rotationTarget = null;
       return;
     }
 
@@ -251,15 +321,15 @@ export function init(elements) {
       updateOperation(existing.id, { params: { degrees: total }, summary });
       return;
     }
-    const images = listAssets('image');
-    if (images.length === 0) return;
     rotationOpId = pushOperation({
       type: 'rotate_image',
-      scope: 'image',
+      scope: target.scope,
+      assetIds: target.assetIds,
       params: { degrees: total },
       summary,
       source: 'user',
     }).id;
+    rotationTarget = wanted;
   };
 
   els.rotateLeft.addEventListener('click', () => turn(-90));
@@ -267,7 +337,11 @@ export function init(elements) {
   els.orientation.addEventListener('change', () => {
     const orientation = els.orientation.value;
     if (!orientation) return;
-    queueForAll('set_image_orientation', { orientation }, `Make ${scopeOfImages()} ${orientation}`);
+    queueForTarget(
+      'set_image_orientation',
+      { orientation },
+      `Make ${scopeOfImages()} ${orientation}`,
+    );
     els.orientation.value = '';
   });
 
@@ -367,6 +441,17 @@ export async function refresh(images) {
     const img = cell?.querySelector('img');
     if (!img) continue;
 
+    // The tick follows the workspace, not the click: an agent that narrows the
+    // selection lights up the same photographs a person would have picked.
+    const picked = isSelected(asset.id);
+    cell.classList.toggle('is-picked', picked);
+    const tick = cell.querySelector('.cell-tick');
+    if (tick) {
+      tick.setAttribute('aria-pressed', String(picked));
+      tick.title = picked ? `Deselect ${asset.name}` : `Select ${asset.name}`;
+      tick.setAttribute('aria-label', tick.title);
+    }
+
     const ops = previewOperations(asset.id);
 
     try {
@@ -407,6 +492,33 @@ function buildCell(asset) {
   img.alt = asset.name;
   img.draggable = false;
   frame.append(img);
+
+  // A tick in the corner, and the whole picture as its hit area: picking four
+  // photographs out of forty should not be four small targets.
+  const tick = document.createElement('button');
+  tick.className = 'cell-tick';
+  tick.type = 'button';
+  tick.innerHTML =
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" ' +
+    'stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M4 12.5 9.5 18 20 6.5"/></svg>';
+  tick.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleSelected(asset.id);
+  });
+  frame.append(tick);
+
+  // Clicking the picture picks it. Shift extends from the last one, the way a
+  // list of files does everywhere else.
+  cell.addEventListener('click', (event) => {
+    if (event.target.closest('.cell-button')) return;
+    if (event.shiftKey) {
+      extendSelection(asset.id);
+      return;
+    }
+    toggleSelected(asset.id);
+    lastPicked = asset.id;
+  });
 
   // The controls sit on the picture they act on, rather than in a list of
   // chips repeating what the grid already shows.

@@ -3,10 +3,14 @@
 
 import { declareTool } from '../core/registry.js';
 import {
+  clearSelection,
   getState,
+  isSelected,
   listAssets,
   operationsFor,
+  selectedAssets,
   setOperationEnabled,
+  setSelection,
 } from '../core/workspace.js';
 
 declareTool({
@@ -20,15 +24,26 @@ declareTool({
     annotations: { readOnlyHint: true },
     execute: async () => {
       const state = getState();
+      const picked = selectedAssets();
       return JSON.stringify({
         files: state.assets.map((a) => ({
           file_id: a.id,
           name: a.name,
           kind: a.kind,
+          // What the user has picked out by hand. When they say "just these",
+          // or "the ones I selected", these are the ones they mean.
+          selected: isSelected(a.id),
           page_count: a.meta.pageCount,
           width: a.meta.width,
           height: a.meta.height,
         })),
+        selection: {
+          file_ids: picked.map((a) => a.id),
+          note:
+            picked.length === 0
+              ? 'The user has not picked any files out, so their controls act on every file of a kind. Pass file_ids yourself to narrow a tool.'
+              : 'The user picked these out by hand. Unless they say otherwise, pass exactly these as file_ids.',
+        },
         // A kind-scoped operation covers whatever is loaded now, so it is
         // reported by the files it actually covers rather than by an id list it
         // does not keep. `applies_to` tells the agent it will also catch files
@@ -75,6 +90,57 @@ declareTool({
       const ok = setOperationEnabled(operation_id, false);
       if (!ok) throw new Error(`No operation with id "${operation_id}".`);
       return `Operation ${operation_id} is disabled. The user can re-enable it from the stack.`;
+    },
+  },
+});
+
+// Narrowing is meaningless with one file, and the tool catalogue is paid for on
+// every request: this one earns its slot only once there is a choice to make.
+declareTool({
+  when: () => listAssets().length > 1,
+  definition: {
+    name: 'select_files',
+    description:
+      'Pick files out on screen, the same selection the user makes by clicking them. ' +
+      'The user can see what you picked and change it. Use this when they ask to work on ' +
+      'a subset ("just the sideways ones") so the choice is visible before anything is ' +
+      'changed, then pass the same ids as file_ids to the tool that does the work. ' +
+      'Pass an empty list to clear the selection, which puts their controls back to ' +
+      'covering every file.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Ids from describe_workspace. An empty array clears the selection.',
+        },
+      },
+      required: ['file_ids'],
+    },
+    annotations: { readOnlyHint: false },
+    execute: async ({ file_ids }) => {
+      if (!Array.isArray(file_ids)) throw new Error('file_ids must be an array of file ids.');
+
+      if (file_ids.length === 0) {
+        clearSelection();
+        return 'Cleared the selection. The user\'s controls act on every file of a kind again.';
+      }
+
+      const assets = listAssets();
+      const unknown = file_ids.filter((id) => !assets.some((a) => a.id === id));
+      if (unknown.length > 0) {
+        throw new Error(
+          `No file with id ${unknown.map((id) => `"${id}"`).join(', ')}. Call describe_workspace for the current ids.`,
+        );
+      }
+
+      setSelection(file_ids);
+      const names = listAssets()
+        .filter((a) => file_ids.includes(a.id))
+        .map((a) => a.name);
+      return `Selected ${names.length} file(s) on screen: ${names.join(', ')}. The user can see the selection and change it.`;
     },
   },
 });

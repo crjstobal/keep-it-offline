@@ -235,15 +235,38 @@ export async function rasterisePages(bytes, redactions, scale = 2) {
     const blob = await new Promise((resolve) =>
       canvas.toBlob(resolve, 'image/jpeg', 0.92),
     );
+
+    // A small copy of the same canvas, for the grid to show. The full-size
+    // bytes are what gets embedded on export; carrying a thumbnail alongside
+    // them is what lets the user see the black boxes before committing to a
+    // download, rather than being asked to take the redaction on trust.
     rendered.push({
       page: entry.page,
       bytes: await blob.arrayBuffer(),
+      preview: thumbnailOf(canvas),
       width: viewport.width / scale,
       height: viewport.height / scale,
     });
   }
 
   return rendered;
+}
+
+/**
+ * A screen-sized copy of a rendered page, as a data URL.
+ *
+ * The grid needs 150px, but the enlarged viewer shows this image too: rendering
+ * the original bytes there would put the blacked-out text back on screen at full
+ * size. 700px reads cleanly enlarged at about half the weight of a full-width
+ * copy, which matters because this is carried alongside the embed bytes for
+ * every redacted page.
+ */
+function thumbnailOf(canvas, width = 700) {
+  const small = document.createElement('canvas');
+  small.width = width;
+  small.height = Math.max(1, Math.round((canvas.height / canvas.width) * width));
+  small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+  return small.toDataURL('image/jpeg', 0.75);
 }
 
 /**

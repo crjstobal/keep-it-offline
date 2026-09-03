@@ -47,6 +47,36 @@ with sync_playwright() as pw:
     p.locator(".op input[type=checkbox]").first.check()
     p.wait_for_timeout(1500)
 
+    # Going back to "No look" cancels the look, the way rotating back to square
+    # takes the rotation away rather than recording a third turn.
+    p.select_option("#look-select", "")
+    p.wait_for_timeout(2000)
+    check("choosing No look takes the look off the stack", p.locator(".op").count() == 0,
+          str(p.locator(".op-summary").all_inner_texts()))
+
+    # Two different looks still stack, and No look only cancels the later one:
+    # it owns the row it pushed, not every look ever chosen.
+    p.select_option("#look-select", "warm")
+    p.wait_for_timeout(2000)
+    p.select_option("#look-select", "black-and-white")
+    p.wait_for_timeout(2000)
+    check("a second look stacks rather than replacing the first",
+          p.locator(".op").count() == 2, str(p.locator(".op-summary").all_inner_texts()))
+
+    p.select_option("#look-select", "")
+    p.wait_for_timeout(2000)
+    summaries = p.locator(".op-summary").all_inner_texts()
+    check("No look cancels only the look it put there",
+          p.locator(".op").count() == 1 and "warm" in summaries[0], str(summaries))
+
+    # Back to one look for the rest of the suite.
+    p.locator(".op .ghost").first.click()
+    p.wait_for_timeout(500)
+    p.select_option("#look-select", "black-and-white")
+    p.wait_for_timeout(2000)
+    check("the bench is back to a single look", p.locator(".op").count() == 1,
+          str(p.locator(".op-summary").all_inner_texts()))
+
     # Strength slider.
     p.fill("#resize-width", "200")
     p.wait_for_timeout(2000)

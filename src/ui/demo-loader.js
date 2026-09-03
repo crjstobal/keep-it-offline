@@ -61,9 +61,11 @@ const SETS = [
 
 /**
  * @param {Object} options
+ * @param {HTMLElement} options.after The element the launcher sits directly under.
  * @param {(files: File[]) => Promise<void>} options.onLoad
+ * @returns {HTMLElement} The launcher, so the caller can hide it with the dropzone.
  */
-export function init({ onLoad }) {
+export function init({ after, onLoad }) {
   const button = document.createElement('button');
   button.className = 'demo-button';
   button.type = 'button';
@@ -112,8 +114,8 @@ export function init({ onLoad }) {
 
   const wrap = document.createElement('div');
   wrap.className = 'demo-launcher';
-  wrap.append(menu, button);
-  document.body.append(wrap);
+  wrap.append(button, menu);
+  after.insertAdjacentElement('afterend', wrap);
 
   const open = () => {
     menu.hidden = false;
@@ -135,6 +137,7 @@ export function init({ onLoad }) {
   }
 
   button.addEventListener('click', () => (menu.hidden ? open() : close()));
+  return wrap;
 }
 
 async function load(set, onLoad) {

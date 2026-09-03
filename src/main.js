@@ -3,17 +3,23 @@
 
 import {
   addAsset,
+  isJoinProduct,
   clearOperations,
+  clearSelection,
   getAsset,
   getState,
+  listAssets,
   operationsFor,
   removeAsset,
   removeOperation,
   pushOperation,
+  selectedAssets,
   setOperationEnabled,
+  setSelection,
   subscribe,
   touch,
 } from './core/workspace.js';
+import { previewPages } from './core/preview.js';
 import { isSupported, onRegistryChange, start } from './core/registry.js';
 import { imageCall, pdfCall } from './core/worker-bridge.js';
 import { ensureLutLoaded, lutFor } from './core/luts.js';
@@ -179,21 +185,31 @@ document.getElementById('clear-changes').addEventListener('click', () => {
 
 document.getElementById('start-over').addEventListener('click', () => {
   const state = getState();
-  if (state.assets.length === 0) return;
-  const files = state.assets.length;
+  const onBench = listAssets();
+  if (onBench.length === 0) return;
+  const files = onBench.length;
   const changes = state.operations.length;
   const detail = changes
     ? `${files} file${files === 1 ? '' : 's'} and ${changes} change${changes === 1 ? '' : 's'}`
     : `${files} file${files === 1 ? '' : 's'}`;
   if (window.confirm(`Start over? This clears ${detail} from the bench.`)) {
     clearOperations();
+    // The raw list, not the bench: a document hidden behind a join is still
+    // loaded, and starting over has to clear it as well.
     for (const asset of [...state.assets]) removeAsset(asset.id);
   }
 });
 
 document.getElementById('remove-blank').addEventListener('click', async () => {
-  const pdf = getState().assets.find((a) => a.kind === 'pdf');
-  if (!pdf) return;
+  // Same rule as blacking out: with several documents loaded, the one the user
+  // means has to be the one they picked.
+  const pdf = grid.getCurrentAsset();
+  if (!pdf) {
+    if (listAssets('pdf').length > 1) {
+      window.alert('Several documents are loaded. Tick a page of the one you mean first.');
+    }
+    return;
+  }
   const { findBlankPages } = await import('./core/redact.js');
   const { blank, pageCount } = await findBlankPages(pdf.bytes);
 
@@ -213,6 +229,136 @@ document.getElementById('remove-blank').addEventListener('click', async () => {
     source: 'user',
   });
 });
+// --- Blacking out by hand --------------------------------------------------
+// The same operation the agent's redact_pdf tool pushes, driven by a person.
+// Both paths call findMatches and rasterisePages and end at pushOperation, so a
+// redaction has one meaning whoever asked for it.
+
+const blackout = {
+  panel: document.getElementById('black-out-panel'),
+  toggle: document.getElementById('black-out-toggle'),
+  text: document.getElementById('black-out-text'),
+  count: document.getElementById('black-out-count'),
+  apply: document.getElementById('black-out-apply'),
+  status: document.getElementById('black-out-status'),
+};
+
+blackout.toggle?.addEventListener('click', () => {
+  const open = blackout.panel.hidden;
+  blackout.panel.hidden = !open;
+  blackout.toggle.setAttribute('aria-expanded', String(open));
+  if (open) blackout.text.focus();
+});
+
+/** What the panel is currently asking for, in the shape findMatches wants. */
+function blackoutSpec() {
+  const raw = blackout.text.value.trim();
+  const categories = [...blackout.panel.querySelectorAll('.blackout-cats input:checked')].map(
+    (box) => box.value,
+  );
+
+  // A plain word and a regular expression look the same in a text box, so both
+  // are tried: whichever matches, matches. Typing "a.b" to mean three literal
+  // characters should not silently become a wildcard, and typing \d{4} should
+  // not be searched for letter by letter.
+  const spec = { categories };
+  if (raw) {
+    spec.text = raw;
+    if (/[\\^$.*+?()[\]{}|]/.test(raw)) {
+      try {
+        new RegExp(raw);
+        spec.pattern = raw;
+      } catch {
+        // Not a valid expression, so it was only ever literal text.
+      }
+    }
+  }
+  return spec;
+}
+
+/**
+ * The document to black out in.
+ *
+ * The only PDF loaded, or the one holding the current selection. With several
+ * on the bench and nothing ticked there is no honest answer: silently picking
+ * the first would redact a document the user was not looking at.
+ */
+function blackoutTarget() {
+  const asset = grid.getCurrentAsset();
+  if (asset) return asset;
+  blackout.status.textContent =
+    'Several documents are loaded. Tick a page of the one you mean first.';
+  return null;
+}
+
+async function runBlackout({ dryRun }) {
+  const asset = blackoutTarget();
+  if (!asset) return;
+
+  const spec = blackoutSpec();
+  if (!spec.text && spec.categories.length === 0) {
+    blackout.status.textContent = 'Type something to find, or tick a category.';
+    return;
+  }
+
+  blackout.status.textContent = 'Looking...';
+  blackout.count.disabled = blackout.apply.disabled = true;
+
+  try {
+    const { findMatches, rasterisePages } = await import('./core/redact.js');
+    const { total, pages } = await findMatches(asset.bytes, spec);
+
+    if (total === 0) {
+      blackout.status.textContent = `Nothing matched in ${asset.name}.`;
+      return;
+    }
+    const where = `${total} match${total === 1 ? '' : 'es'} on ${pages.length} page${
+      pages.length === 1 ? '' : 's'
+    }`;
+    if (dryRun) {
+      blackout.status.textContent = `${where}. Nothing changed yet.`;
+      return;
+    }
+
+    blackout.status.textContent = 'Flattening those pages...';
+    const rendered = await rasterisePages(asset.bytes, pages);
+
+    const what = [
+      spec.text && `"${spec.text}"`,
+      spec.categories.length && spec.categories.join(', '),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    pushOperation({
+      type: 'redact',
+      assetIds: asset.id,
+      params: { rendered, pages: pages.map((entry) => entry.page) },
+      summary: `Redact ${total} match${total === 1 ? '' : 'es'} of ${what}`,
+      source: 'user',
+    });
+    blackout.status.textContent = `${where} blacked out. Undo it in Changes so far.`;
+  } catch (error) {
+    blackout.status.textContent = String(error?.message ?? error);
+  } finally {
+    blackout.count.disabled = blackout.apply.disabled = false;
+  }
+}
+
+blackout.count?.addEventListener('click', () => {
+  runBlackout({ dryRun: true }).catch((error) =>
+    console.error('[keepitoffline] counting failed', error),
+  );
+});
+blackout.apply?.addEventListener('click', () => {
+  runBlackout({ dryRun: false }).catch((error) =>
+    console.error('[keepitoffline] blackout failed', error),
+  );
+});
+blackout.text?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') blackout.apply.click();
+});
+
 els.rotateLeft.addEventListener('click', () => grid.rotateSelected(els.gridHost, 270));
 els.rotateRight.addEventListener('click', () => grid.rotateSelected(els.gridHost, 90));
 
@@ -363,8 +509,12 @@ window.addEventListener('drop', (event) => {
 });
 
 // Sample files go through exactly the same path as a drop, so nothing about the
-// app knows or cares that they came from a button.
-demoLoader.init({ onLoad: (files) => handleFiles(files) });
+// app knows or cares that they came from a button. The offer sits right under
+// the dropzone and leaves with it.
+els.demoLauncher = demoLoader.init({
+  after: els.dropzone,
+  onLoad: (files) => handleFiles(files),
+});
 
 // --- Export ----------------------------------------------------------------
 
@@ -442,9 +592,19 @@ async function renderAsset(asset, onProgress) {
   return { bytes: result.bytes, type: result.type, filename: `${base}-edited.${extension}` };
 }
 
+/**
+ * Is there anything to save for this file?
+ *
+ * Queued edits count, and so does being the product of a join: a combined
+ * document is itself the change, even before anything is done to it.
+ */
+function hasPendingWork(asset) {
+  return operationsFor(asset.id).length > 0 || isJoinProduct(asset.id);
+}
+
 async function exportAsset(assetId) {
   const asset = getAsset(assetId);
-  if (!asset || operationsFor(asset.id).length === 0) return;
+  if (!asset || !hasPendingWork(asset)) return;
   const { bytes, type, filename } = await renderAsset(asset);
   download(bytes, type, filename);
 }
@@ -457,7 +617,7 @@ async function exportAsset(assetId) {
  * most of the batch.
  */
 async function exportAll() {
-  const pending = getState().assets.filter((a) => operationsFor(a.id).length > 0);
+  const pending = listAssets().filter(hasPendingWork);
   if (pending.length === 0) return;
 
   if (pending.length === 1) {
@@ -497,24 +657,123 @@ els.exportBtn.addEventListener('click', () => {
   exportAll().catch((error) => console.error('[keepitoffline] export failed', error));
 });
 
-/** Join several PDFs, applying each one's queued changes first. */
-async function mergePdfs(assetIds, name) {
-  const sources = assetIds
-    .map((id) => getAsset(id))
-    .filter(Boolean)
-    .map((asset) => ({
-      bytes: asset.bytes.slice(0),
-      operations: operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params })),
-    }));
-  if (sources.length < 2) return;
+/**
+ * Join several PDFs into one, applying each one's queued changes first.
+ *
+ * The result lands on the bench rather than in the downloads folder. Joining is
+ * an edit, not an export: the combined document is the thing the user is now
+ * working on, and they should be able to keep going with it, black something
+ * out in it, and only then save a copy. It also means the two documents stop
+ * being two on screen, which is what joining them was for.
+ */
+async function mergePdfs(assetIds, name, { order } = {}) {
+  const assets = assetIds.map((id) => getAsset(id)).filter(Boolean);
+  if (assets.length < 2) return null;
 
-  const { bytes } = await pdfCall('merge', { sources });
-  download(bytes, 'application/pdf', name || 'combined.pdf');
+  const sources = assets.map((asset) => ({
+    bytes: asset.bytes.slice(0),
+    operations: operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params })),
+  }));
+
+  const { bytes, pageCount } = await pdfCall('merge', { sources, order });
+  const merged = addAsset({
+    name: name || 'combined.pdf',
+    kind: 'pdf',
+    bytes,
+    // Marked as made rather than opened, so the workspace knows it has no life
+    // of its own once the join that produced it is gone.
+    meta: { pageCount, joined: true },
+  });
+
+  // The sources stay on the bench, hidden behind the join rather than deleted.
+  // That is what lets this be undone: untick the row and the two documents are
+  // back, each with the edits that were queued against it.
+  pushOperation({
+    type: 'join',
+    params: { sources: assets.map((a) => a.id), merged: merged.id },
+    summary: `Join ${assets.map((a) => a.name).join(' and ')} into one document`,
+    source: 'user',
+  });
+  return merged;
 }
 
 window.addEventListener('keepitoffline:merge', (event) => {
   mergePdfs(event.detail.assetIds, event.detail.name).catch((error) =>
     console.error('[keepitoffline] could not merge', error),
+  );
+});
+
+/**
+ * A page dragged from one document into another.
+ *
+ * Crossing the boundary is the user saying these are one document. Two PDFs
+ * cannot share a page while they stay two files, so the drop joins them and
+ * then puts the page where the pointer left it. From here on there is one
+ * document, one heading, and no boundary to cross.
+ */
+async function mixPages({ fromAssetId, sourceIndex, intoAssetId, atIndex }) {
+  const from = getAsset(fromAssetId);
+  const into = getAsset(intoAssetId);
+  if (!from || !into) return;
+
+  // Bench order decides which half of the joined document comes first, so the
+  // pages arrive laid out the way they were on screen.
+  const order = listAssets('pdf')
+    .filter((asset) => asset.id === fromAssetId || asset.id === intoAssetId)
+    .map((asset) => asset.id);
+
+  const pagesOf = (asset) =>
+    previewPages(
+      asset.meta.pageCount,
+      operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params })),
+    );
+
+  // Where the dragged page and the drop gap land once the two are one run.
+  const leading = order[0] === intoAssetId ? into : from;
+  const leadCount = pagesOf(leading).length;
+  const offsetOf = (assetId) => (assetId === leading.id ? 0 : leadCount);
+
+  const inFrom = pagesOf(from).findIndex((page) => page.sourceIndex === sourceIndex);
+  // A page already queued for removal is not in the joined run at all, so there
+  // is nothing to place. Joining the documents is still what the drag asked for.
+  const movedFrom = inFrom === -1 ? -1 : offsetOf(fromAssetId) + inFrom;
+  const dropAt = offsetOf(intoAssetId) + atIndex;
+
+  const total = leadCount + pagesOf(leading.id === from.id ? into : from).length;
+  let pageOrder;
+  if (movedFrom >= 0 && movedFrom < total) {
+    pageOrder = [...Array(total).keys()];
+    const target = Math.max(0, Math.min(dropAt > movedFrom ? dropAt - 1 : dropAt, total - 1));
+    if (target !== movedFrom) {
+      const [moved] = pageOrder.splice(movedFrom, 1);
+      pageOrder.splice(target, 0, moved);
+    }
+  }
+
+  // The page lands in place as part of the join rather than as a second step,
+  // so the whole gesture is one row on the stack and one thing to undo.
+  await mergePdfs(order, combinedName(order.map(getAsset)), { order: pageOrder });
+}
+
+/**
+ * A name for documents that have become one.
+ *
+ * Built from the names in the order the pages now run, so the file says what it
+ * holds. Long names are cut rather than stacked: three or four joins should not
+ * produce a filename nobody can read.
+ */
+function combinedName(assets) {
+  const stem = assets
+    .filter(Boolean)
+    .map((asset) => asset.name.replace(/\.pdf$/i, ''))
+    .join('-')
+    .slice(0, 76);
+  return `${stem || 'combined'}.pdf`;
+}
+
+window.addEventListener('keepitoffline:mix-pages', (event) => {
+  mixPages(event.detail).catch((error) =>
+    console.error('[keepitoffline] could not mix the pages', error),
   );
 });
 
@@ -541,7 +800,7 @@ function describeAsset(asset) {
 }
 
 function renderAssets(state) {
-  const busy = state.assets.length > 0;
+  const busy = listAssets().length > 0;
 
   // The headline and the dropzone have both done their job once there is work
   // on the bench: they shrink to a line, and the files take the space.
@@ -558,7 +817,7 @@ function renderAssets(state) {
   // three columns start on the same line. Which one that is follows the same
   // order the editors appear in.
   const zoomSlot = document.getElementById('bench-zoom');
-  const kinds = new Set(state.assets.map((a) => a.kind));
+  const kinds = new Set(listAssets().map((a) => a.kind));
   const editorId = kinds.has('pdf')
     ? 'editor'
     : kinds.has('image')
@@ -580,16 +839,24 @@ function renderAssets(state) {
   }
   zoomSlot.hidden = !wanted;
   // With the whole window taking drops, the strip is only needed while the
-  // bench is empty and there is nothing else to aim at.
+  // bench is empty and there is nothing else to aim at. The sample offer under
+  // it goes with it.
   els.dropzone.hidden = busy;
+  if (els.demoLauncher) els.demoLauncher.hidden = busy;
 
   // Files with no grid of their own still need a way off the bench.
   els.assetList.replaceChildren();
-  for (const asset of state.assets) {
+  const loadedPdfs = listAssets('pdf');
+  for (const asset of listAssets()) {
     if (asset.kind !== 'pdf') continue;
 
     const li = document.createElement('li');
     li.className = `asset asset-${asset.kind}`;
+    // The chip is tinted to match its group on the bench, but only while there
+    // is more than one document: a lone PDF has nothing to be told apart from.
+    if (loadedPdfs.length > 1) {
+      li.dataset.band = String(loadedPdfs.indexOf(asset) % 4);
+    }
 
     const info = document.createElement('div');
     info.className = 'asset-info';
@@ -607,7 +874,7 @@ function renderAssets(state) {
 
   // Joining is the reason documents keep a row of their own: it is the one
   // action that is about the files rather than about the pages inside them.
-  const pdfs = state.assets.filter((a) => a.kind === 'pdf');
+  const pdfs = listAssets('pdf');
   if (pdfs.length > 1) {
     const merge = document.createElement('li');
     merge.className = 'asset-action';
@@ -616,12 +883,86 @@ function renderAssets(state) {
     button.type = 'button';
     button.textContent = `Join ${pdfs.length} documents into one`;
     button.addEventListener('click', () => {
-      mergePdfs(pdfs.map((a) => a.id), 'combined.pdf').catch((error) =>
+      mergePdfs(pdfs.map((a) => a.id), combinedName(pdfs)).catch((error) =>
         console.error('[keepitoffline] could not merge', error),
       );
     });
     merge.append(button);
     els.assetList.append(merge);
+  }
+}
+
+// --- Selection ---------------------------------------------------------------
+// One line per kind, saying what the controls beside it will act on. The three
+// kinds behave identically, so they are described once as data.
+
+const SCOPES = [
+  { kind: 'image', noun: 'photo', nouns: 'photos', all: 'every loaded image' },
+  { kind: 'video', noun: 'clip', nouns: 'clips', all: 'every loaded video' },
+  { kind: 'audio', noun: 'track', nouns: 'tracks', all: 'every loaded track' },
+];
+
+for (const { kind } of SCOPES) {
+  document
+    .getElementById(`${kind}-select-all`)
+    ?.addEventListener('click', () =>
+      setSelection(listAssets(kind).map((a) => a.id), kind),
+    );
+  document
+    .getElementById(`${kind}-select-none`)
+    ?.addEventListener('click', () => clearSelection(kind));
+}
+
+/**
+ * Clicking the empty space around the files lets them all go.
+ *
+ * This is what people expect from anything that holds a selection, and it saves
+ * hunting for a Clear button. The bar is deliberately high: only a click that
+ * landed on nothing at all counts. A click on a file, on any control, or on the
+ * panels either side means something else, and a drag that happens to end on
+ * open space is a reorder, not a click.
+ */
+document.addEventListener('click', (event) => {
+  if (getState().selection.size === 0) return;
+
+  const target = event.target;
+  if (
+    target.closest(
+      '.image-cell, .video-cell, .audio-row, .rail, .side, .topbar, ' +
+        '.viewer, .demo-launcher, button, input, select, label, a',
+    )
+  ) {
+    return;
+  }
+  clearSelection();
+});
+
+/**
+ * Say what the next control will do, in the same words the stack will use.
+ *
+ * The line is the only thing standing between "I moved a slider" and "I moved a
+ * slider over forty photographs", so it is never blank and never ambiguous.
+ */
+function renderScopes() {
+  for (const { kind, noun, nouns, all } of SCOPES) {
+    const line = document.getElementById(`${kind}-scope`);
+    if (!line) continue;
+
+    const loaded = listAssets(kind);
+    const chosen = selectedAssets(kind);
+    const narrowed = chosen.length > 0;
+
+    line.textContent = narrowed
+      ? `Applies to ${chosen.length} selected ${chosen.length === 1 ? noun : nouns}`
+      : `Applies to ${all}`;
+    line.classList.toggle('is-narrowed', narrowed);
+
+    // Selecting everything by hand is the same as selecting nothing, so the
+    // offer is only worth making while it would actually change something.
+    const selectAll = document.getElementById(`${kind}-select-all`);
+    if (selectAll) selectAll.hidden = loaded.length < 2 || chosen.length === loaded.length;
+    const selectNone = document.getElementById(`${kind}-select-none`);
+    if (selectNone) selectNone.hidden = !narrowed;
   }
 }
 
@@ -639,7 +980,10 @@ export function makeRemoveButton(asset) {
     const warning = queued
       ? `Remove ${asset.name}? It has ${queued} change${queued === 1 ? '' : 's'} that will go with it.`
       : `Remove ${asset.name} from the bench?`;
-    if (window.confirm(warning)) removeAsset(asset.id);
+    if (window.confirm(warning)) {
+      grid.forget(asset.id);
+      removeAsset(asset.id);
+    }
   });
   return button;
 }
@@ -720,7 +1064,7 @@ function layoutRail(state) {
     ['audio', 'Sound', '#audio-editor'],
   ];
 
-  const kinds = new Set(state.assets.map((a) => a.kind));
+  const kinds = new Set(listAssets().map((a) => a.kind));
   rail.hidden = kinds.size === 0;
 
   for (const [kind, label, editorSelector] of groups) {
@@ -756,11 +1100,12 @@ function layoutRail(state) {
 subscribe((state) => {
   renderAssets(state);
   renderOperations(state);
+  renderScopes();
   layoutRail(state);
 
   // Show the first PDF in the editor, and keep the grid in step with the stack
   // so a page removed by the agent greys out as soon as the tool returns.
-  const images = state.assets.filter((a) => a.kind === 'image');
+  const images = listAssets('image');
   els.imageEditor.hidden = images.length === 0;
   if (images.length > 0) {
     imagePanel
@@ -768,29 +1113,22 @@ subscribe((state) => {
       .catch((error) => console.error('[keepitoffline] image preview failed', error));
   }
 
-  const videos = state.assets.filter((a) => a.kind === 'video');
+  const videos = listAssets('video');
   els.videoEditor.hidden = videos.length === 0;
   if (videos.length > 0) videoPanel.refresh(videos);
 
-  const tracks = state.assets.filter((a) => a.kind === 'audio');
+  const tracks = listAssets('audio');
   els.audioEditor.hidden = tracks.length === 0;
   if (tracks.length > 0) audioPanel.refresh(tracks);
 
-  const pdf = state.assets.find((a) => a.kind === 'pdf');
-  const shown = grid.getCurrentAsset();
-
-  if (!pdf) {
-    els.editor.hidden = true;
-    if (shown) grid.showAsset(null, els.gridHost);
-    return;
-  }
-
-  els.editor.hidden = false;
-  if (!shown || shown.id !== pdf.id) {
-    grid.showAsset(pdf, els.gridHost).then(() => grid.refresh(els.gridHost));
-  } else {
-    grid.refresh(els.gridHost);
-  }
+  // Every PDF is drawn, each in its own group. showAssets() rebuilds only when
+  // the set of documents changes and otherwise just refreshes, so a queued
+  // operation costs a repaint rather than a re-render of every thumbnail.
+  const pdfs = listAssets('pdf');
+  els.editor.hidden = pdfs.length === 0;
+  grid
+    .showAssets(els.gridHost)
+    .catch((error) => console.error('[keepitoffline] could not draw the pages', error));
 });
 
 // --- Agent wiring ----------------------------------------------------------
@@ -810,3 +1148,4 @@ if (isSupported) {
 
 renderAssets(getState());
 renderOperations(getState());
+renderScopes();

@@ -29,16 +29,30 @@
         </svg>
         <h1>Keep It Offline</h1>
       </div>
-      <div class="promise" title="Nothing is uploaded: the app makes no network requests with your files.">
-        <span class="promise-label">Nothing leaves your computer</span>
+      <!-- The two ways back, together, where a back button always sits. Each
+           appears only once there is something for it to undo: Undo needs a
+           change, Start over needs a file. -->
+      <div class="topbar-back">
+        <button class="ghost" id="undo-last" hidden>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>
+          </svg>
+          <span>Undo</span>
+        </button>
+        <button class="ghost start-over" id="start-over" hidden>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 12H5M11 6l-6 6 6 6"/>
+          </svg>
+          <span>Start over</span>
+        </button>
       </div>
       <div class="topbar-end">
         <div class="agent-status" id="agent-status" hidden>
           <span class="agent-dot" aria-hidden="true"></span>
           <span id="agent-status-text">Agent ready</span>
         </div>
-        <button class="ghost" id="undo-last" hidden>Undo</button>
-        <button class="ghost start-over" id="start-over" hidden>Start over</button>
       </div>
     </header>
 
@@ -117,7 +131,39 @@
             <button class="ghost" id="rotate-left" disabled>Rotate ↺</button>
             <button class="ghost" id="rotate-right" disabled>Rotate ↻</button>
             <button class="ghost" id="remove-blank">Remove blank pages</button>
+            <button class="ghost" id="black-out-toggle" aria-expanded="false"
+                    aria-controls="black-out-panel">Black out&hellip;</button>
             <button class="danger" id="remove-selected" disabled>Remove selected</button>
+          </div>
+
+          <!-- Redaction by hand. The agent has had a tool for this all along;
+               this is the same operation, pushed from the same place, so a
+               person working without an agent is not a second-class user. -->
+          <div class="blackout" id="black-out-panel" hidden>
+            <p class="blackout-lede">
+              Find text and burn it out. Matching pages are flattened to images,
+              so the covered words are removed from the file rather than hidden
+              behind a rectangle that any reader can lift.
+            </p>
+            <div class="blackout-row">
+              <label for="black-out-text">Text or pattern</label>
+              <input type="text" id="black-out-text"
+                     placeholder="e.g. a name, an address, or a regular expression" />
+            </div>
+            <fieldset class="blackout-cats">
+              <legend>Or pick what to look for</legend>
+              <label><input type="checkbox" value="email" /> Email addresses</label>
+              <label><input type="checkbox" value="phone" /> Phone numbers</label>
+              <label><input type="checkbox" value="iban" /> IBANs</label>
+              <label><input type="checkbox" value="card" /> Card numbers</label>
+              <label><input type="checkbox" value="id_number" /> ID numbers</label>
+              <label><input type="checkbox" value="date" /> Dates</label>
+            </fieldset>
+            <div class="blackout-actions">
+              <button class="ghost" id="black-out-count">Count matches</button>
+              <button class="primary" id="black-out-apply">Black them out</button>
+              <span class="blackout-status" id="black-out-status" role="status"></span>
+            </div>
           </div>
           <div class="worktools">
             <label class="zoom-control" title="Page size">
@@ -136,7 +182,13 @@
 
         <div class="editor" id="image-editor" hidden>
           <div class="actionbar" data-label="Colour">
-            <span class="selection-count">Applies to every loaded image</span>
+            <!-- What the controls below will act on. It says "every" until
+                 photographs are picked out, and then says which. -->
+            <div class="scope-line">
+              <span class="selection-count" id="image-scope">Applies to every loaded image</span>
+              <button class="link-button" id="image-select-all">Select all</button>
+              <button class="link-button" id="image-select-none" hidden>Clear</button>
+            </div>
             <label class="field">
               Look
               <select id="look-select"></select>
@@ -265,7 +317,11 @@
 
         <div class="editor" id="video-editor" hidden>
           <div class="actionbar" data-label="Colour and rotation">
-            <span class="selection-count">Applies to every loaded video</span>
+            <div class="scope-line">
+              <span class="selection-count" id="video-scope">Applies to every loaded video</span>
+              <button class="link-button" id="video-select-all">Select all</button>
+              <button class="link-button" id="video-select-none" hidden>Clear</button>
+            </div>
             <label class="field">
               Look
               <select id="video-look"></select>
@@ -301,7 +357,11 @@
 
         <div class="editor" id="audio-editor" hidden>
           <div class="actionbar">
-            <span class="selection-count">Applies to every loaded track</span>
+            <div class="scope-line">
+              <span class="selection-count" id="audio-scope">Applies to every loaded track</span>
+              <button class="link-button" id="audio-select-all">Select all</button>
+              <button class="link-button" id="audio-select-none" hidden>Clear</button>
+            </div>
             <label class="field">
               Speed
               <input type="range" id="audio-speed" min="25" max="400" step="5" value="100" />

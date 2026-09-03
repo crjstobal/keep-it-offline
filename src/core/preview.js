@@ -9,6 +9,7 @@
  * @typedef {Object} PreviewPage
  * @property {number} sourceIndex  Index in the original document.
  * @property {number} rotation     Total rotation to apply, in degrees.
+ * @property {string} [redacted]   Data URL of the flattened page, when blacked out.
  */
 
 /**
@@ -39,6 +40,24 @@ export function previewPages(pageCount, operations) {
       }
       case 'reorder_pages': {
         pages = op.params.order.map((i) => pages[i]).filter(Boolean);
+        break;
+      }
+      case 'redact': {
+        // Redaction replaces a page with a flattened image of itself. The grid
+        // has to show that image, or the black boxes exist only in the exported
+        // file and the user is asked to trust a change they cannot see.
+        //
+        // The operation names pages of the original document, which is what
+        // findMatches reported, so the match is on sourceIndex rather than on
+        // the page's current position.
+        const byPage = new Map(
+          (op.params.rendered ?? []).map((entry) => [entry.page - 1, entry.preview]),
+        );
+        pages = pages.map((page) =>
+          byPage.has(page.sourceIndex)
+            ? { ...page, redacted: byPage.get(page.sourceIndex) }
+            : page,
+        );
         break;
       }
       default:

@@ -32,6 +32,15 @@
   --kind-audio: #12a594;
   --kind-audio-soft: #d8f2ee;
 
+  /* One hue per document on the bench, so two PDFs read as two things without
+     having to compare their names. Orange stays first: with a single document
+     loaded nothing is banded at all, and the moment a second arrives the first
+     keeps the colour the app already uses for a PDF. */
+  --doc-0: #f26a2e;
+  --doc-1: #2e8ce8;
+  --doc-2: #12a594;
+  --doc-3: #b85cd6;
+
   --radius: 16px;
   --radius-sm: 10px;
 }
@@ -49,11 +58,6 @@ body {
   color: var(--text);
   font: 15px/1.5 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
-}
-
-@keyframes kio-breathe {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
 }
 
 .topbar {
@@ -110,37 +114,6 @@ body {
   background: var(--panel);
 }
 
-/* The claim is the product, so it is stated in words and lives in the header,
-   not buried as a number in a corner. */
-.promise {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 16px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-}
-.promise::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent);
-  animation: kio-breathe 3s ease-in-out infinite;
-}
-.promise-label {
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--accent-deep);
-}
-.promise-value {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--accent-deep);
-  opacity: 0.75;
-}
 
 .agent-status {
   display: flex;
@@ -153,6 +126,9 @@ body {
   font-weight: 600;
   color: var(--agent-deep);
 }
+/* Flex on the element itself outranks the hidden attribute, and this one
+   must not claim an agent is ready in a browser that has no WebMCP. */
+.agent-status[hidden] { display: none; }
 .agent-dot {
   width: 8px; height: 8px; border-radius: 999px;
   background: var(--agent);
@@ -430,6 +406,118 @@ button {
 .danger:hover:not(:disabled) { background: rgb(248 113 113 / 0.12); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* --- Documents on the bench ---------------------------------------------- */
+/* Each PDF gets a group of its own: a heading, and a coloured edge running down
+   the side of its pages. The colour is the cheap part of the distinction, the
+   heading is the honest one, and both go away when the documents become one. */
+
+.page-group {
+  --band: var(--doc-0);
+  position: relative;
+  padding-left: 14px;
+  margin-bottom: 26px;
+}
+.page-group[data-band="1"] { --band: var(--doc-1); }
+.page-group[data-band="2"] { --band: var(--doc-2); }
+.page-group[data-band="3"] { --band: var(--doc-3); }
+.page-group:last-child { margin-bottom: 0; }
+
+/* The edge only appears when there is a heading above it, which is to say when
+   there is more than one document to tell apart. */
+.page-group:has(.page-group-head)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--band);
+  opacity: 0.5;
+}
+
+.page-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.page-group-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-group-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* While a page is in the air every group says it will take it, because it
+   will: dropping across the boundary joins the two documents. */
+.page-group.is-drop-target:has(.page-group-head) {
+  outline: 1px dashed var(--line);
+  outline-offset: 6px;
+  border-radius: var(--radius-sm);
+}
+.page-group.is-drop-over:has(.page-group-head) {
+  outline-color: var(--band);
+  outline-style: solid;
+}
+
+/* The redaction panel. It opens under the action bar rather than in a modal:
+   the pages it is about are right there, and watching them turn black as the
+   operation lands is the confirmation that the thing worked. */
+/* display:flex would otherwise beat the hidden attribute's UA display:none,
+   leaving the panel open on load. */
+.blackout[hidden] { display: none; }
+.blackout {
+  padding: 14px 16px 16px;
+  margin-bottom: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.blackout-lede { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); max-width: 62ch; }
+.blackout-row { display: flex; flex-direction: column; gap: 5px; }
+.blackout-row label { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.blackout-row input {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 11px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.blackout-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.blackout-cats { margin: 0; padding: 0; border: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.blackout-cats legend { padding: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-2); }
+.blackout-cats label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.blackout-cats input { accent-color: var(--accent); }
+
+.blackout-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* .primary is sized for the full-width export button in the sidebar. In a row
+   of controls it has to be an ordinary button again. */
+.blackout-actions .primary {
+  width: auto;
+  margin-top: 0;
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+}
+.blackout-status { font-size: 13px; color: var(--muted); flex: 1 1 12ch; }
+
 .page-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -460,6 +548,27 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .page-cell.is-selected { border-color: var(--accent); }
 .page-cell.is-removed { opacity: 0.32; }
 .page-cell.is-removed img { filter: grayscale(1); }
+
+/* A redacted page is showing a flattened image of itself with the black burned
+   in. It reads as an ordinary page otherwise, so it says so out loud: the whole
+   promise is that the covered text is gone, and that is worth confirming. */
+.page-cell.is-redacted { border-color: var(--text); }
+.page-cell.is-redacted .page-frame::after {
+  content: "Redacted";
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  translate: -50% 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--panel);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+.page-cell.is-redacted .page-frame { position: relative; }
 
 /* Rotation in CSS does not change the space an element reserves, so the frame
    is a square: the one shape that fits the same page at any rotation. The page
@@ -951,7 +1060,11 @@ input[type="range"] { accent-color: var(--accent); }
   max-height: calc(var(--thumb-size, 460px) * 1.1);
   object-fit: contain;
 }
-.video-stage { width: 100%; }
+/* The stage anchors the controls that sit on the picture: the tick, and the
+   view and remove buttons. Without this they position against the page. */
+.video-stage { width: 100%; position: relative; }
+.video-cell:hover .cell-actions,
+.video-cell:focus-within .cell-actions { opacity: 1; }
 
 .time-fields { display: flex; align-items: center; gap: 8px; }
 .time-input { width: 74px; font-variant-numeric: tabular-nums; }
@@ -980,55 +1093,59 @@ input[type="color"] {
 
 /* --- Sample files -------------------------------------------------------- */
 /* A workbench with nothing on it cannot show what it does, so there is always
-   a way to put something on it. */
+   a way to put something on it. The offer sits right under the doorway, and
+   goes away with it once there is work on the bench. */
 
 .demo-launcher {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 40;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
 }
+.demo-launcher[hidden] { display: none; }
 
 .demo-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 11px 20px;
   border: none;
   border-radius: 999px;
   background: var(--accent);
   color: #fff;
   font-weight: 600;
   font-size: 13px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
   transition: translate 0.15s, box-shadow 0.15s;
 }
-.demo-button:hover { translate: 0 -1px; box-shadow: 0 12px 28px rgb(0 0 0 / 0.5); }
+.demo-button:hover { translate: 0 -1px; box-shadow: 0 10px 24px rgb(0 0 0 / 0.22); }
 .demo-button.is-open { background: var(--text); color: var(--panel); }
 
+/* The sets open in the page rather than over it: a list that floats can run
+   off the bottom of a short window, and here there is room to spread out. */
 .demo-menu {
-  width: 320px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  width: 100%;
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: 0 16px 40px rgb(0 0 0 / 0.55);
 }
 .demo-menu[hidden] { display: none; }
+.demo-menu-heading, .demo-menu-note { grid-column: 1 / -1; }
 
 .demo-menu-heading {
-  margin: 0 0 10px;
+  margin: 0 0 2px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
 }
 .demo-menu-note {
-  margin: 10px 2px 0;
+  margin: 2px 2px 0;
   font-size: 11px;
   line-height: 1.45;
   color: var(--muted);
@@ -1040,7 +1157,6 @@ input[type="color"] {
   gap: 11px;
   width: 100%;
   padding: 10px;
-  margin-bottom: 6px;
   text-align: left;
   background: var(--panel-2);
   border: 1px solid transparent;
@@ -1055,8 +1171,7 @@ input[type="color"] {
 .demo-item-text small { font-size: 11px; color: var(--muted); line-height: 1.4; }
 
 @media (max-width: 700px) {
-  .demo-launcher { right: 12px; bottom: 12px; }
-  .demo-menu { width: min(320px, calc(100vw - 24px)); }
+  .demo-menu { width: min(320px, calc(100vw - 32px)); }
 }
 
 /* --- Lede ---------------------------------------------------------------- */
@@ -1218,6 +1333,14 @@ input[type="range"]::-moz-range-thumb {
   flex-shrink: 0;
 }
 .asset-pdf::before { background: var(--kind-pdf); }
+/* With several PDFs loaded the chip's dot matches its group on the bench, so
+   the name at the top and the pages below it are the same document at a
+   glance. A lone PDF keeps the plain PDF orange: there is nothing to tell it
+   apart from. */
+.asset-pdf[data-band="0"]::before { background: var(--doc-0); }
+.asset-pdf[data-band="1"]::before { background: var(--doc-1); }
+.asset-pdf[data-band="2"]::before { background: var(--doc-2); }
+.asset-pdf[data-band="3"]::before { background: var(--doc-3); }
 .asset-image::before { background: var(--kind-image); }
 .asset-video::before { background: var(--kind-video); }
 .asset-audio::before { background: var(--kind-audio); }
@@ -1313,6 +1436,95 @@ input[type="range"]::-moz-range-thumb {
 .cell-button:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
 .cell-remove:hover { background: var(--danger); border-color: var(--danger); }
 
+/* --- Picking files out --------------------------------------------------- */
+/* Selecting narrows what the controls act on. Nothing picked means everything,
+   so the ticks are quiet until one is used and unmistakable afterwards. */
+
+.cell-tick {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgb(255 253 248 / 0.95);
+  color: transparent;
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+/* An empty tick appears on approach; a ticked one always shows, or a selection
+   would be invisible the moment the pointer left. */
+.image-cell:hover .cell-tick,
+.image-cell:focus-within .cell-tick,
+.video-cell:hover .cell-tick,
+.video-cell:focus-within .cell-tick { opacity: 1; }
+.cell-tick:hover { border-color: var(--accent); color: var(--accent); }
+
+.is-picked .cell-tick {
+  opacity: 1;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* The picked file itself, so a selection is readable from across the grid
+   rather than by hunting for small ticks. */
+.image-cell.is-picked,
+.video-cell.is-picked {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+/* Everything not picked steps back, which is what makes four out of forty
+   legible at a glance.
+   Dimming only, never a colour filter: these cells are live previews, and
+   draining the colour from one would be indistinguishable from a black-and-white
+   look being applied to it. */
+.image-grid:has(.is-picked) .image-cell:not(.is-picked) {
+  opacity: 0.45;
+  scale: 0.97;
+  transition: opacity 0.15s, scale 0.15s;
+}
+.image-grid:has(.is-picked) .image-cell:not(.is-picked):hover {
+  opacity: 0.8;
+  scale: 1;
+}
+
+.row-pick {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.audio-row.is-picked { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.audio-list:has(.is-picked) .audio-row:not(.is-picked) { opacity: 0.6; }
+
+/* The line that says what the controls below will act on. In the rail it is a
+   caption with its two actions tucked under it on one row, not a stack of
+   underlined links: they are an aside to the sentence above them. */
+.scope-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.scope-line .selection-count { margin: 0; flex: 1 1 100%; }
+.scope-line .is-narrowed { color: var(--accent-deep); font-weight: 600; }
+.scope-line .link-button {
+  flex: 0 0 auto;
+  margin-top: 0;
+  width: auto;
+  font-size: 12.5px;
+}
+.scope-line .link-button[hidden] { display: none; }
+
 /* Dragging to reorder: order decides what a contact sheet looks like. */
 .image-cell { cursor: grab; }
 .image-cell.is-dragging { opacity: 0.4; cursor: grabbing; }
@@ -1343,8 +1555,6 @@ input[type="range"]::-moz-range-thumb {
   min-width: 34px;
   text-align: right;
 }
-
-.promise-label { max-width: 340px; line-height: 1.25; }
 
 /* --- Tools rail, grouped ------------------------------------------------- */
 /* Fifteen controls in a single column is a wall. Each section is a card of its
@@ -1415,19 +1625,28 @@ input[type="range"]::-moz-range-thumb {
 
 /* --- Header -------------------------------------------------------------- */
 
-.topbar-end { display: flex; align-items: center; gap: 10px; }
+.topbar-end { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 
-.promise {
-  margin: 0 auto;
-  padding: 9px 18px;
+/* Beside the name, where a back button lives: an arrow and the words, so each
+   reads as a way out and not as a shortcut for something worse. */
+.topbar-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
 }
-.promise-label { max-width: none; white-space: nowrap; }
-
-.start-over {
-  padding: 8px 14px;
+.topbar-back .ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px 7px 11px;
   font-size: 13.5px;
   color: var(--text-2);
 }
+/* Undo is the smaller retreat and is used far more often, so it leads and keeps
+   the neutral hover; Start over is the one that clears the bench. */
+#undo-last[hidden] { display: none; }
+.start-over[hidden] { display: none; }
 .start-over:hover { color: var(--danger); border-color: var(--danger); background: transparent; }
 
 .panel-head {
@@ -1614,9 +1833,8 @@ body.is-file-dragging::after {
 .image-cell.is-stacked.drop-before::before { top: -8px; }
 .image-cell.is-stacked.drop-after::after { bottom: -8px; }
 
-/* On a phone the three header items cannot sit on one line: the promise is the
-   one that must survive, so it wraps onto its own row underneath and the bar
-   grows instead of overflowing sideways. */
+/* On a phone the header items cannot all sit on one line, so the bar is
+   allowed to wrap and grow instead of overflowing sideways. */
 @media (max-width: 720px) {
   .topbar {
     height: auto;
@@ -1625,14 +1843,7 @@ body.is-file-dragging::after {
     padding: 12px 16px;
   }
   .brand h1 { font-size: 18px; }
-  .promise {
-    order: 3;
-    width: 100%;
-    margin: 0;
-    text-align: center;
-  }
-  .promise-label { white-space: normal; }
-  .topbar-end { margin-left: auto; }
+  .start-over { margin-left: 0; }
   main { padding: 14px 16px 32px; }
   .site-footer { padding-inline: 16px; }
 }

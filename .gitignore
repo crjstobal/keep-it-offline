@@ -4,3 +4,6 @@ dist/
 test/fixtures/*.png
 test/*.png
 *.log
+
+# Filming aids, generated from material that stays out of this repository
+tools/make-video-pdfs.py

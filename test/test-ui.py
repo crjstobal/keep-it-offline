@@ -181,7 +181,11 @@ with sync_playwright() as pw:
     page.locator(".page-cell").nth(0).locator(".page-zoom").click()
     page.wait_for_timeout(400)
     check("zoom button opens the viewer", page.locator(".viewer:not([hidden])").count() == 1)
-    check("viewer shows the right page", "Page 1 of 6" in page.inner_text(".viewer-caption"),
+    check("viewer shows the right page", "page 1 of 6" in page.inner_text(".viewer-caption"),
+          page.inner_text(".viewer-caption"))
+    # The viewer can be opened from any of several documents, so it says which.
+    check("and says which document it came from",
+          "sample.pdf" in page.inner_text(".viewer-caption"),
           page.inner_text(".viewer-caption"))
 
     # Opening the viewer must not change the selection.
@@ -192,7 +196,7 @@ with sync_playwright() as pw:
     # Arrow keys page through the document.
     page.keyboard.press("ArrowRight")
     page.wait_for_timeout(300)
-    check("arrow key advances a page", "Page 2 of 6" in page.inner_text(".viewer-caption"),
+    check("arrow key advances a page", "page 2 of 6" in page.inner_text(".viewer-caption"),
           page.inner_text(".viewer-caption"))
 
     # The viewer renders at a higher resolution than the thumbnail.

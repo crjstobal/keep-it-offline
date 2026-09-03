@@ -6,12 +6,16 @@
 // looked exactly like the grade being broken.
 
 import {
+  describeTarget,
   getState,
+  isSelected,
   listAssets,
   operationsFor,
   pushOperation,
   removeAsset,
   removeOperation,
+  targetFor,
+  toggleSelected,
   updateOperation,
 } from '../core/workspace.js';
 import { availableLuts, ensureLutLoaded, lutFor } from '../core/luts.js';
@@ -24,15 +28,13 @@ let els = {};
 /** Per-clip playback state, keyed by asset id. */
 const clips = new Map();
 
-// Whole-clip controls cover the videos as a set, so the row must not freeze a
-// count that a later drop would make wrong.
-const scopeOf = (list) => (list.length === 1 ? list[0].name : 'every clip');
+// Whole-clip controls cover the videos as a set unless clips have been picked
+// out, so the row must not freeze a count that a later drop would make wrong.
+const CLIP_WORDS = { one: 'clip', many: 'clips', all: 'every clip' };
+const scopeOfClips = (target = targetFor('video')) => describeTarget(target, CLIP_WORDS);
 
-function queue(type, params, summary) {
-  const list = listAssets('video');
-  if (list.length === 0) return;
-  pushOperation({ type, scope: 'video', params, summary, source: 'user' });
-}
+/** Which clips a row was pushed for, so a changed selection starts a new one. */
+const targetKey = (target) => (target.scope ? 'all' : target.assetIds.join(','));
 
 export function init(elements) {
   els = elements;
@@ -60,12 +62,15 @@ export function init(elements) {
       lookOpId = null;
     }
     if (look) {
+      const target = targetFor('video');
+      if (target.assets.length === 0) return;
       await ensureLutLoaded(look).catch(() => {});
       const op = pushOperation({
         type: 'apply_lut',
-        scope: 'video',
+        scope: target.scope,
+        assetIds: target.assetIds,
         params: { lut_name: look, intensity: Number(els.strength.value) / 100 },
-        summary: `Grade ${scopeOf(listAssets('video'))} with the ${look} look`,
+        summary: `Grade ${scopeOfClips()} with the ${look} look`,
         source: 'user',
       });
       lookOpId = op.id;
@@ -78,12 +83,17 @@ export function init(elements) {
     els.strengthValue.textContent = `${percent}%`;
     if (!lookOpId) return;
     const look = els.look.value;
+    // The row keeps whichever clips it was pushed for: the slider changes how
+    // strong the grade is, not who gets it.
+    const op = getState().operations.find((o) => o.id === lookOpId);
+    if (!op) return;
+    const named = scopeOfClips(op);
     updateOperation(lookOpId, {
       params: { intensity: percent / 100 },
       summary:
         percent === 100
-          ? `Grade ${scopeOf(listAssets('video'))} with the ${look} look`
-          : `Grade ${scopeOf(listAssets('video'))} with the ${look} look at ${percent}%`,
+          ? `Grade ${named} with the ${look} look`
+          : `Grade ${named} with the ${look} look at ${percent}%`,
     });
     for (const entry of clips.values()) entry.drawCurrentFrame();
   });
@@ -93,29 +103,39 @@ export function init(elements) {
    * turning back to square takes the change away.
    */
   let rotationOpId = null;
+  let rotationTarget = null;
   const turn = (delta) => {
-    const existing = getState().operations.find((op) => op.id === rotationOpId);
+    const target = targetFor('video');
+    if (target.assets.length === 0) return;
+
+    // Folding only applies while the turns are about the same clips.
+    const wanted = targetKey(target);
+    const existing =
+      rotationTarget === wanted
+        ? getState().operations.find((op) => op.id === rotationOpId)
+        : undefined;
     const total = (((existing?.params.degrees ?? 0) + delta) % 360 + 360) % 360;
 
     if (total === 0) {
       if (existing) removeOperation(existing.id);
       rotationOpId = null;
+      rotationTarget = null;
       return;
     }
-    const summary = `Rotate ${scopeOf(listAssets('video'))} by ${total}°`;
+    const summary = `Rotate ${scopeOfClips(target)} by ${total}°`;
     if (existing) {
       updateOperation(existing.id, { params: { degrees: total }, summary });
       return;
     }
-    const list = listAssets('video');
-    if (list.length === 0) return;
     rotationOpId = pushOperation({
       type: 'rotate_video',
-      scope: 'video',
+      scope: target.scope,
+      assetIds: target.assetIds,
       params: { degrees: total },
       summary,
       source: 'user',
     }).id;
+    rotationTarget = wanted;
   };
 
   els.rotateLeft.addEventListener('click', () => turn(-90));
@@ -147,6 +167,16 @@ export function refresh(list) {
     const entry = clips.get(asset.id);
     if (!entry) continue;
 
+    const cell = els.grid.querySelector(`[data-asset-id="${asset.id}"]`);
+    const picked = isSelected(asset.id);
+    cell?.classList.toggle('is-picked', picked);
+    const tick = cell?.querySelector('.cell-tick');
+    if (tick) {
+      tick.setAttribute('aria-pressed', String(picked));
+      tick.title = picked ? `Deselect ${asset.name}` : `Select ${asset.name}`;
+      tick.setAttribute('aria-label', tick.title);
+    }
+
     const ops = operationsFor(asset.id).map((op) => ({ type: op.type, params: op.params }));
     const output = plan(asset.meta, ops);
 
@@ -173,6 +203,21 @@ function buildCell(asset) {
   const canvas = document.createElement('canvas');
   canvas.className = 'video-canvas';
   stage.append(canvas);
+
+  // The same tick a photograph carries. The picture is not the hit area here:
+  // clicking a clip is how you scrub it, so only the tick selects.
+  const tick = document.createElement('button');
+  tick.className = 'cell-tick';
+  tick.type = 'button';
+  tick.innerHTML =
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" ' +
+    'stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M4 12.5 9.5 18 20 6.5"/></svg>';
+  tick.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleSelected(asset.id);
+  });
+  stage.append(tick);
 
   const header = document.createElement('div');
   header.className = 'audio-header';

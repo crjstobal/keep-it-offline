@@ -353,7 +353,9 @@ declareTool({
       'Join two or more loaded PDFs into a single document, in the order given. ' +
       'Each document keeps the changes queued against it, so pages removed from one ' +
       'are gone before it is appended. Call describe_workspace first to get the file ids. ' +
-      'This produces a download immediately rather than queueing a change.',
+      'Like every other change this is queued, not written: the combined document ' +
+      'appears on the bench and the user can undo the join to get their separate ' +
+      'files back. Nothing is downloaded until they ask for it.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -392,7 +394,7 @@ declareTool({
       );
 
       const total = chosen.reduce((n, a) => n + a.meta.pageCount, 0);
-      return `Joining ${chosen.length} PDFs (about ${total} pages before any queued removals) and preparing the download. Nothing left the browser.`;
+      return `Queued a join of ${chosen.length} PDFs (about ${total} pages before any queued removals). The combined document is on the bench and the user can undo the join to get the separate files back. Nothing left the browser.`;
     },
   },
 });

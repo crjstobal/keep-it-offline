@@ -116,7 +116,7 @@ async function describe(bytes) {
  * predictable: pages removed from the second document are gone before it is
  * appended, so the page numbers a person saw are the ones they get.
  */
-async function mergeDocuments(sources) {
+async function mergeDocuments(sources, order) {
   const merged = await PDFDocument.create();
 
   for (const source of sources) {
@@ -124,6 +124,11 @@ async function mergeDocuments(sources) {
     const copied = await merged.copyPages(edited, edited.getPageIndices());
     for (const page of copied) merged.addPage(page);
   }
+
+  // A page dragged from one document into another is placed as part of the
+  // join, not as a step after it: the caller works out where it lands and the
+  // combined document is built that way from the start.
+  if (order?.length) return rebuild(merged, order);
   return merged;
 }
 
@@ -136,7 +141,7 @@ self.onmessage = async (event) => {
         result = await describe(payload.bytes);
         break;
       case 'merge': {
-        const merged = await mergeDocuments(payload.sources);
+        const merged = await mergeDocuments(payload.sources, payload.order);
         const out = await merged.save();
         self.postMessage(
           { id, ok: true, result: { bytes: out.buffer, pageCount: merged.getPageCount() } },

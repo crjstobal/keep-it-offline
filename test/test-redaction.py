@@ -90,6 +90,59 @@ with sync_playwright() as pw:
     check("the export is a valid PDF with both pages", "Pages:           2" in pages_out,
           [l for l in pages_out.splitlines() if "Pages" in l])
 
+    # --- The user has to be able to see it -----------------------------------
+    # A redaction that only exists in the downloaded file asks the user to trust
+    # a change they were never shown. The grid must black the page out too, and
+    # unticking the operation must put the original back.
+    p.evaluate("""async () => {
+        const { clearOperations } = await import('./src/core/workspace.js');
+        clearOperations();
+    }""")
+    p.wait_for_timeout(600)
+    check("clearing puts the pages back", p.locator(".page-cell.is-redacted").count() == 0)
+
+    # --- Blacking out by hand ------------------------------------------------
+    # The agent has had a tool for this all along. A person needs the same thing,
+    # pushing the same operation, or the feature does not exist without an agent.
+    p.click("#black-out-toggle")
+    p.check(".blackout-cats input[value=email]")
+    p.click("#black-out-count")
+    p.wait_for_timeout(2500)
+    counted = p.text_content("#black-out-status")
+    check("counting reports matches without changing anything",
+          "match" in counted and p.locator(".op").count() == 0, counted)
+
+    p.click("#black-out-apply")
+    p.wait_for_timeout(5000)
+    check("blacking out by hand queues an operation", p.locator(".op").count() == 1,
+          p.text_content("#black-out-status"))
+    check("it is tagged as the user's, not the agent's",
+          p.locator(".badge-user").count() == 1)
+    check("the redacted page is blacked out on screen",
+          p.locator(".page-cell.is-redacted").count() == 1,
+          str(p.locator(".page-cell.is-redacted").count()))
+    check("the page with nothing on it is left alone",
+          p.locator(".page-cell").count() == 2
+          and p.locator(".page-cell.is-redacted").count() == 1)
+
+    # Unticking has to reverse what is on screen, the same as every other change.
+    p.locator(".op input[type=checkbox]").last.uncheck()
+    p.wait_for_timeout(800)
+    check("unticking the operation restores the original page",
+          p.locator(".page-cell.is-redacted").count() == 0)
+    p.locator(".op input[type=checkbox]").last.check()
+    p.wait_for_timeout(800)
+    check("and ticking it blacks the page out again",
+          p.locator(".page-cell.is-redacted").count() == 1)
+
+    # Enlarging a redacted page must not put the hidden text back on screen.
+    p.locator(".page-cell.is-redacted").first.hover()
+    p.locator(".page-cell.is-redacted").first.locator(".page-zoom").click()
+    p.wait_for_timeout(2500)
+    shown = p.evaluate("() => document.querySelector('.viewer img')?.src ?? ''")
+    check("the enlarged view shows the redacted render, not the original",
+          shown.startswith("data:image/"), shown[:60])
+
     check("no errors throughout", not errors, "; ".join(errors[:3]))
     b.close()
 
